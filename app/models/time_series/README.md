@@ -80,3 +80,13 @@ Attention LSTM 모델은 다음과 같이 모듈화되어 있다:
 4. `training.py`: 모델 학습 및 예측 기능
 5. `utils.py`: 유틸리티 함수
 6. `main.py`: 메인 실행 코드
+
+## 주요 클래스 및 함수
+
+-   **`MultiStepTimeSeriesDataset`**: 시계열 데이터를 슬라이딩 윈도우 방식으로 처리
+-   **`AttentionLSTMModel`**: Attention 메커니즘이 통합된 LSTM 모델
+-   **`EntmaxAttention`**: 희소 어텐션을 제공하는 Entmax15 기반 어텐션 메커니즘
+-   **`train_model`**: 모델 학습 로직
+-   **`predict_future_prices`**: 학습된 모델을 사용하여 미래 가격 예측
+
+> 모델 이론 및 관련 여러 이론 참고는 [문서](./MODEL_DESCRIPTION.md)를 참고.
