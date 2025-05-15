@@ -11,7 +11,10 @@ Attention LSTM 모델 메인 실행 모듈 (Main Execution Module)
 4. 결과 저장 및 시각화
 
 실행 방법:
-    python app/models/time_series/attention_lstm/main.py --epochs 200 --batch_size 10
+    python -m app.models.time_series.attention_lstm.main --epochs 200 --batch_size 10
+    또는
+    cd app
+    python -m models.time_series.attention_lstm.main --epochs 200 --batch_size 10
 """
 
 import argparse
@@ -22,14 +25,26 @@ import sys
 from datetime import datetime
 
 # 패키지 경로 설정을 위한 코드
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+app_dir = os.path.abspath(os.path.join(current_dir, '../../../../'))
+if app_dir not in sys.path:
+    sys.path.append(app_dir)
 
-# 내부 모듈 import (상대 경로로 수정)
-from .data_preprocessing import load_and_prepare_data, train_test_split, scale_data
-from .dataset import MultiStepTimeSeriesDataset
-from .model import AttentionLSTMModel
-from .training import train_model, predict_future_prices
-from .utils import save_prediction_to_csv, save_model
+# 절대 경로로 변경
+try:
+    # 패키지로 임포트될 때 사용하는 상대 경로
+    from .data_preprocessing import load_and_prepare_data, train_test_split, scale_data
+    from .dataset import MultiStepTimeSeriesDataset
+    from .model import AttentionLSTMModel
+    from .training import train_model, predict_future_prices
+    from .utils import save_prediction_to_csv, save_model
+except ImportError:
+    # 직접 실행될 때 사용하는 절대 경로
+    from models.time_series.attention_lstm.data_preprocessing import load_and_prepare_data, train_test_split, scale_data
+    from models.time_series.attention_lstm.dataset import MultiStepTimeSeriesDataset
+    from models.time_series.attention_lstm.model import AttentionLSTMModel
+    from models.time_series.attention_lstm.training import train_model, predict_future_prices
+    from models.time_series.attention_lstm.utils import save_prediction_to_csv, save_model
 
 
 def main(macro_data_path, climate_data_path, output_path='./data/output/', 

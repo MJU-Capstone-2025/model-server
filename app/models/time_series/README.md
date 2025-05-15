@@ -22,20 +22,18 @@ pip install torch pandas numpy matplotlib scikit-learn entmax
 
 #### 방법 1: 기존 스크립트 실행 (권장)
 
+app 디렉토리로 이동 후 실행:
+
 ```bash
 cd app
-```
-
-app 디렉토리에서 다음 명령어를 실행한다:
-
-```bash
-python -m app.models.time_series.attention_lstm_model --epochs 200 --batch_size 10
+# 어텐션 LSTM 모델 실행
+python -m models.time_series.attention_lstm.main --epochs 10 --batch_size 10
 ```
 
 #### 방법 2: 모듈화된 코드 직접 실행
 
 ```bash
-python -m app.models.time_series.attention_lstm.main --epochs 200 --batch_size 10
+python -m models.time_series.attention_lstm.main --epochs 200 --batch_size 10
 ```
 
 ### 매개변수 설명
