@@ -1,117 +1,19 @@
+"""
+예측 및 결과 시각화 관련 기능
+"""
+import os
 import pandas as pd
 import numpy as np
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-import seaborn as sns
-import yfinance as yf
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.pipeline import Pipeline
-from sklearn.ensemble import RandomForestRegressor
-import os
 from datetime import datetime, timedelta
-
-# 한글 폰트 설정 (Windows 환경 기준)
-mpl.rcParams['font.family'] = 'Malgun Gothic'
-mpl.rcParams['axes.unicode_minus'] = False
-
-# ==============================
-# Constants
-# ==============================
-DATA_PATH = './data/input/weather_with_lag.csv'
-LABEL_PATH = './data/input/coffee_label.csv'
-SELECTED_LAGS = ['_lag_1m', '_lag_2m', '_lag_3m', '_lag_6m']
-PREDICT_DAYS = 57  # 57일로 변경 (어제부터 시작해서 총 57일 예측)
-TRUE_PRICE_PATH = './data/output/coffee_price.csv'
-MARKET_HOLIDAYS = [
-    "2025-01-01",  # 신정
-    "2025-01-20",  # Martin Luther King Jr. Day
-    "2025-02-17",  # Presidents Day
-    "2025-04-18",  # Good Friday
-    "2025-05-26",  # Memorial Day
-    "2025-07-04",  # Independence Day
-    "2025-09-01",  # Labor Day
-    "2025-11-27",  # Thanksgiving
-    "2025-12-25",  # Christmas
-]
-
-
-# ==============================
-# Functions
-# ==============================
-
-def load_data():
-    data = pd.read_csv(DATA_PATH)
-    label = pd.read_csv(LABEL_PATH)
-    data['Date'] = pd.to_datetime(data['Date'])
-    label['Date'] = pd.to_datetime(label['Date'])
-    print(f"1. 데이터 로드 완료: {data.shape}")
-    print(f"- 학습에 사용된 데이터 기간: {data['Date'].min()} ~ {data['Date'].max()}")
-    return data, label
-
-def preprocess_data(df):
-    df['month'] = df['Date'].dt.month.astype(str)
-    df['year'] = df['Date'].dt.year
-    df['dayofyear'] = df['Date'].dt.dayofyear
-    df['country'] = df['locationName'].apply(lambda x: x.split('_')[0])
-    df['city'] = df['locationName'].apply(lambda x: '_'.join(x.split('_')[1:]))
-    df['is_brazil'] = (df['country'] == 'brazil').astype(int)
-    df['is_colombia'] = (df['country'] == 'colombia').astype(int)
-    df['is_ethiopia'] = (df['country'] == 'ethiopia').astype(int)
-    df['is_near_harvest'] = (df['days_until_harvest'] <= 30).astype(int)
-    return df
-
-def is_market_closed(date):
-    """주어진 날짜가 주말이거나 공휴일인지 확인"""
-    date = pd.to_datetime(date)
-    is_weekend = date.weekday() >= 5  # 5: 토요일, 6: 일요일
-    is_holiday = date.strftime('%Y-%m-%d') in MARKET_HOLIDAYS
-    return is_weekend or is_holiday
-
-
-def define_columns(df):
-    categorical = ['city', 'season_tag', 'month']
-    exclude = ['Date', 'Coffee_Price', 'Coffee_Price_Return']
-    numeric = [
-        c for c in df.select_dtypes(['float64','int64']).columns
-        if c not in exclude + categorical
-    ]
-    numeric = [c for c in numeric
-                if ('_lag_' not in c) or any(l in c for l in SELECTED_LAGS)]
-    print("2. 컬럼 분류 완료.")
-    print(f"- 범주형: {categorical}")
-    print(f"- 수치형: {len(numeric)}개")
-    return categorical, numeric
-
-def build_pipeline(categorical):
-    ct = ColumnTransformer([("cat", OneHotEncoder(handle_unknown="ignore"), categorical)],
-                            remainder="passthrough")
-    rf = RandomForestRegressor(random_state=42, max_features='sqrt',
-                                n_estimators=400, n_jobs=-1)
-    return Pipeline([("pre", ct), ("reg", rf)])
-
-def generate_future_rows_with_lag(data, start_date, days=56):
-    """start_date부터 days일 만큼의 미래 데이터를 생성합니다."""
-    dates = pd.date_range(start=start_date, periods=days)
-    lag_cols = [c for c in data.columns if '_lag_' in c]
-    base_cols = set(c.split('_lag_')[0] for c in lag_cols)
-    common = ['locationName', 'season_tag', 'days_until_harvest'] + list(base_cols)
-    rows = []
-    for d in dates:
-        r = {'Date': d}
-        for c in common:
-            r[c] = data[c].mode()[0] if c in data else np.nan
-        for lc in lag_cols:
-            base = lc.split('_lag_')[0]
-            m = int(lc.split('_lag_')[1].replace('m',''))
-            ld = d - pd.DateOffset(months=m)
-            mdf = data[data['Date']==ld]
-            r[lc] = mdf[base].values[0] if not mdf.empty else np.nan
-        rows.append(r)
-    return pd.DataFrame(rows)
+from .config import TRUE_PRICE_PATH, PREDICT_DAYS
+from .utils import is_market_closed
+from .data import preprocess_data, generate_future_rows_with_lag
 
 def predict_future_prices(pipe, full_data, cat_cols, num_cols, days=57):
-    """미래 가격을 예측하고 실제 가격으로 보정하여 저장합니다."""
+    """
+    미래 가격을 예측하고 실제 가격으로 보정하여 저장합니다.
+    """
     # 오늘 날짜 설정 및 파일명 생성
     today = pd.Timestamp.today().normalize()
     yesterday = today - pd.Timedelta(days=1)  # 어제 날짜 계산
@@ -258,21 +160,3 @@ def predict_future_prices(pipe, full_data, cat_cols, num_cols, days=57):
     plt.show()
     
     return pred
-
-# Main
-if __name__ == "__main__":
-    data, label = load_data()
-    data = preprocess_data(data)
-    cats, nums = define_columns(data)
-    ml = build_pipeline(cats)
-    
-    # 전체 학습
-    dfm = pd.merge(data, label, on='Date')
-    X_all = dfm[cats + nums]
-    y_all = dfm['Coffee_Price']
-    print("\n📦 학습 중...")
-    ml.fit(X_all, y_all)
-    print("✅ 학습 완료\n")
-    
-    # 예측 & 저장
-    predict_future_prices(ml, data, cats, nums, days=PREDICT_DAYS)
