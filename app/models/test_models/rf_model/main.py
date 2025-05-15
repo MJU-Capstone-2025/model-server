@@ -2,10 +2,18 @@
 RF 모델의 메인 실행 모듈
 """
 import pandas as pd
-from .data import load_data, preprocess_data, define_columns
-from .model import build_pipeline
-from .predict import predict_future_prices
-from .config import PREDICT_DAYS
+import os
+import sys
+
+# 현재 모듈의 디렉토리를 가져옵니다
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+from data import load_data, preprocess_data, define_columns
+from model import build_pipeline
+from predict import predict_future_prices
+from config import PREDICT_DAYS
 
 def run_model():
     """

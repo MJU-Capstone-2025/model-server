@@ -6,9 +6,16 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
-from .config import TRUE_PRICE_PATH, PREDICT_DAYS
-from .utils import is_market_closed
-from .data import preprocess_data, generate_future_rows_with_lag
+import sys
+
+# 현재 모듈의 디렉토리를 가져옵니다
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+from config import TRUE_PRICE_PATH, PREDICT_DAYS
+from utils import is_market_closed
+from data import preprocess_data, generate_future_rows_with_lag
 
 def predict_future_prices(pipe, full_data, cat_cols, num_cols, days=57):
     """

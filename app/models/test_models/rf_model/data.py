@@ -2,7 +2,15 @@
 데이터 로딩 및 전처리 관련 기능
 """
 import pandas as pd
-from .config import DATA_PATH, LABEL_PATH, SELECTED_LAGS
+import os
+import sys
+
+# 현재 모듈의 디렉토리를 가져옵니다
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+from config import DATA_PATH, LABEL_PATH, SELECTED_LAGS
 
 def load_data():
     """
@@ -35,7 +43,7 @@ def define_columns(df):
     """
     데이터 컬럼을 범주형과 수치형으로 분류합니다.
     """
-    from .config import DEFAULT_CATEGORICAL_FEATURES, EXCLUDE_COLUMNS, SELECTED_LAGS
+    from config import DEFAULT_CATEGORICAL_FEATURES, EXCLUDE_COLUMNS, SELECTED_LAGS
     
     categorical = DEFAULT_CATEGORICAL_FEATURES
     exclude = EXCLUDE_COLUMNS

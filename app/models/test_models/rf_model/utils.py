@@ -2,7 +2,15 @@
 유틸리티 함수 모음
 """
 import pandas as pd
-from .config import MARKET_HOLIDAYS
+import os
+import sys
+
+# 현재 모듈의 디렉토리를 가져옵니다
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+from config import MARKET_HOLIDAYS
 
 def is_market_closed(date):
     """
