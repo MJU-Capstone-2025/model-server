@@ -1,8 +1,8 @@
 """
 Attention LSTM 모델 메인 실행 모듈 (Main Execution Module)
 
-이 모듈은 Attention LSTM 모델 파이프라인을 실행하는 메인 코드입니다.
-데이터 로딩, 전처리, 모델 학습, 예측, 및 결과 저장을 포함하는 전체 프로세스를 조정합니다.
+이 모듈은 Attention LSTM 모델 파이프라인을 실행하는 메인 코드다.
+데이터 로딩, 전처리, 모델 학습, 예측, 및 결과 저장을 포함하는 전체 프로세스를 조정한다.
 
 주요 기능:
 1. 명령행 인수 처리
@@ -36,7 +36,7 @@ def main(macro_data_path, climate_data_path, output_path='./data/output/',
             data_window=100, future_target=14, step=6, batch_size=10, 
             hidden_size=100, num_epochs=200):
     """
-    모델 학습 및 예측을 실행하는 메인 함수입니다.
+    모델 학습 및 예측을 실행하는 메인 함수다.
     
     Args:
         macro_data_path (str): 거시경제 데이터 파일 경로

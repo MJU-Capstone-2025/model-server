@@ -1,8 +1,8 @@
 """
 시계열 데이터셋 모듈 (Time Series Dataset Module)
 
-이 모듈은 LSTM 모델 학습에 필요한 시계열 데이터셋 클래스를 제공합니다.
-PyTorch의 Dataset 클래스를 상속하여 시계열 데이터를 미니배치로 처리할 수 있도록 구현합니다.
+이 모듈은 LSTM 모델 학습에 필요한 시계열 데이터셋 클래스를 제공한다.
+PyTorch의 Dataset 클래스를 상속하여 시계열 데이터를 미니배치로 처리할 수 있도록 구현한다.
 
 주요 기능:
 1. 시계열 데이터를 슬라이딩 윈도우 방식으로 처리
@@ -30,7 +30,7 @@ class MultiStepTimeSeriesDataset(Dataset):
     다중 스텝 시계열 예측을 위한 PyTorch 데이터셋 클래스
     
     이 클래스는 시계열 데이터를 슬라이딩 윈도우 방식으로 처리하여
-    입력 시퀀스(X)와 타겟 시퀀스(y)를 생성합니다.
+    입력 시퀀스(X)와 타겟 시퀀스(y)를 생성한다.
     """
     
     def __init__(self, dataset, target, data_window, target_size, step, single_step=False):

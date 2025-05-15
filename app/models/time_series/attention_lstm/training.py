@@ -1,8 +1,8 @@
 """
 모델 학습 및 예측 모듈 (Model Training and Prediction Module)
 
-이 모듈은 Attention LSTM 모델의 학습 및 예측 기능을 제공합니다.
-학습 루프, 손실 계산, 가중치 업데이트, 그리고 학습된 모델을 이용한 미래 가격 예측 기능을 포함합니다.
+이 모듈은 Attention LSTM 모델의 학습 및 예측 기능을 제공한다.
+학습 루프, 손실 계산, 가중치 업데이트, 그리고 학습된 모델을 이용한 미래 가격 예측 기능을 포함한다.
 
 주요 기능:
 1. 모델 학습 (train_model)
@@ -33,7 +33,7 @@ from datetime import datetime, timedelta
 
 def train_model(train_loader, model, device, num_epochs=200):
     """
-    모델을 학습합니다.
+    모델을 학습한다.
     
     Args:
         train_loader (DataLoader): 학습 데이터 로더
@@ -79,7 +79,7 @@ def train_model(train_loader, model, device, num_epochs=200):
 
 def predict_future_prices(model, X_train, train_df, df, scaler, target_col='Coffee_Price', days=14, device='cpu', save_plot=True, output_path='./data/output/'):
     """
-    미래 가격을 예측합니다.
+    미래 가격을 예측한다.
     
     Args:
         model (nn.Module): 학습된 모델

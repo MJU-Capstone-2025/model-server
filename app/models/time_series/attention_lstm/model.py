@@ -1,8 +1,8 @@
 """
 어텐션 LSTM 모델 모듈 (Attention LSTM Model Module)
 
-이 모듈은 커피 가격 예측에 사용되는 Attention LSTM 모델의 아키텍처를 정의합니다.
-EntmaxAttention을 사용하여 시계열 데이터에서 중요한 패턴을 감지하는 기능을 제공합니다.
+이 모듈은 커피 가격 예측에 사용되는 Attention LSTM 모델의 아키텍처를 정의한다.
+EntmaxAttention을 사용하여 시계열 데이터에서 중요한 패턴을 감지하는 기능을 제공한다.
 
 주요 구성:
 1. EntmaxAttention: 희소 어텐션을 제공하는 Entmax15 기반 어텐션 메커니즘
@@ -44,7 +44,7 @@ class EntmaxAttention(nn.Module):
     Entmax15 기반의 어텐션 메커니즘
     
     기존 Softmax 어텐션보다 더 희소한(sparse) 어텐션 가중치를 산출하여
-    더 선택적인 특성을 학습할 수 있도록 합니다.
+    더 선택적인 특성을 학습할 수 있도록 한다.
     """
     
     def __init__(self, hidden_size, attn_dim=64):

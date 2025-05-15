@@ -1,7 +1,7 @@
 """
 Attention LSTM 모델 패키지 (Attention LSTM Model Package)
 
-이 패키지는 Attention 메커니즘을 활용한 LSTM 기반 커피 가격 예측 모델을 제공합니다.
+이 패키지는 Attention 메커니즘을 활용한 LSTM 기반 커피 가격 예측 모델을 제공한다.
 
 주요 모듈:
 1. data_preprocessing.py: 데이터 로딩 및 전처리 기능

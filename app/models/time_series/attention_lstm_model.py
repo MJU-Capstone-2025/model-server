@@ -1,7 +1,7 @@
 """
-이 파일은 이제 대체되었습니다.
-새로운 모듈화된 코드는 attention_lstm/ 디렉토리에 있습니다.
-하위 호환성을 위해 이 파일은 유지되며 새 모듈을 임포트합니다.
+이 파일은 이제 대체되었다.
+새로운 모듈화된 코드는 attention_lstm/ 디렉토리에 있다.
+하위 호환성을 위해 이 파일은 유지되며 새 모듈을 임포트한다.
 
 사용 예시:
     from app.models.time_series.attention_lstm_model import main
@@ -24,14 +24,14 @@ from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
-# 현재 파일의 절대 경로를 가져옵니다.
+# 현재 파일의 절대 경로를 가져온다.
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-# 새 패키지 경로를 sys.path에 추가합니다.
+# 새 패키지 경로를 sys.path에 추가한다.
 if current_dir not in sys.path:
     sys.path.append(current_dir)
 
-# 새 모듈을 임포트합니다.
+# 새 모듈을 임포트한다.
 from attention_lstm.data_preprocessing import load_and_prepare_data, train_test_split, scale_data, add_volatility_features
 from attention_lstm.dataset import MultiStepTimeSeriesDataset
 from attention_lstm.model import AttentionLSTMModel, EntmaxAttention
@@ -39,8 +39,8 @@ from attention_lstm.training import train_model, predict_future_prices
 from attention_lstm.utils import save_prediction_to_csv, save_model, load_model
 from attention_lstm.main import main
 
-# 하위 호환성을 위해 모든 함수와 클래스를 현재 네임스페이스로 가져옵니다.
-# 이렇게 하면 이전 코드가 그대로 작동합니다.
+# 하위 호환성을 위해 모든 함수와 클래스를 현재 네임스페이스로 가져온다.
+# 이렇게 하면 이전 코드가 그대로 작동한다.
 __all__ = [
     'load_and_prepare_data', 'train_test_split', 'scale_data', 'add_volatility_features',
     'MultiStepTimeSeriesDataset', 'AttentionLSTMModel', 'EntmaxAttention',

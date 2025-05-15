@@ -1,7 +1,7 @@
 """
 유틸리티 모듈 (Utilities Module)
 
-이 모듈은 모델 예측 결과를 저장하고 시각화하는 유틸리티 기능을 제공합니다.
+이 모듈은 모델 예측 결과를 저장하고 시각화하는 유틸리티 기능을 제공한다.
 
 주요 기능:
 1. 예측 결과를 CSV 파일로 저장
@@ -25,7 +25,7 @@ from datetime import datetime
 
 def save_prediction_to_csv(forecast_series, filename=None, output_path='./data/output/'):
     """
-    예측 결과를 CSV 파일로 저장합니다.
+    예측 결과를 CSV 파일로 저장한다.
     
     Args:
         forecast_series (pd.Series): 예측 결과 시리즈
@@ -53,7 +53,7 @@ def save_prediction_to_csv(forecast_series, filename=None, output_path='./data/o
 
 def save_model(model, scaler, hyperparameters, metrics, output_path='./data/output/'):
     """
-    학습된 모델과 관련 정보를 저장합니다.
+    학습된 모델과 관련 정보를 저장한다.
     
     Args:
         model (nn.Module): 학습된 모델
@@ -81,7 +81,7 @@ def save_model(model, scaler, hyperparameters, metrics, output_path='./data/outp
 
 def load_model(model_path, device='cpu'):
     """
-    저장된 모델을 로드합니다.
+    저장된 모델을 로드한다.
     
     Args:
         model_path (str): 모델 파일 경로

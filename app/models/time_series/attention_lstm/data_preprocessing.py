@@ -1,7 +1,7 @@
 """
 데이터 전처리 모듈 (Data Preprocessing Module)
 
-이 모듈은 커피 가격 예측 모델에 사용되는 데이터 전처리 기능을 포함하고 있습니다.
+이 모듈은 커피 가격 예측 모델에 사용되는 데이터 전처리 기능을 포함하고 있다.
 주요 기능:
 1. 거시경제 및 기후 데이터 로딩
 2. 데이터 전처리 (결측치 처리, 날짜 인덱스 설정 등)
@@ -29,7 +29,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 def add_volatility_features(df):
     """
-    주가 변동성 관련 피처를 추가합니다.
+    주가 변동성 관련 피처를 추가한다.
     
     Args:
         df (pd.DataFrame): 입력 데이터프레임
@@ -60,7 +60,7 @@ def add_volatility_features(df):
 
 def load_and_prepare_data(macro_data_path, climate_data_path):
     """
-    데이터를 로드하고 전처리합니다.
+    데이터를 로드하고 전처리한다.
     
     Args:
         macro_data_path (str): 거시경제 데이터 파일 경로
@@ -90,7 +90,7 @@ def load_and_prepare_data(macro_data_path, climate_data_path):
 
 def train_test_split(df, train_size=0.8):
     """
-    데이터를 학습 및 테스트 세트로 분할합니다.
+    데이터를 학습 및 테스트 세트로 분할한다.
     
     Args:
         df (pd.DataFrame): 입력 데이터프레임
@@ -107,7 +107,7 @@ def train_test_split(df, train_size=0.8):
 
 def scale_data(train_df):
     """
-    학습 데이터를 스케일링합니다.
+    학습 데이터를 스케일링한다.
     
     Args:
         train_df (pd.DataFrame): 학습 데이터프레임
