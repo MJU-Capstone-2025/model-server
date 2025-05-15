@@ -9,6 +9,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestRegressor
 import os
+from datetime import datetime, timedelta
 
 # 한글 폰트 설정 (Windows 환경 기준)
 mpl.rcParams['font.family'] = 'Malgun Gothic'
@@ -20,8 +21,8 @@ mpl.rcParams['axes.unicode_minus'] = False
 DATA_PATH = './data/input/weather_with_lag.csv'
 LABEL_PATH = './data/input/coffee_label.csv'
 SELECTED_LAGS = ['_lag_1m', '_lag_2m', '_lag_3m', '_lag_6m']
-PREDICT_DAYS = 56
-OUTPUT_PATH = './data/output/coffee_price.csv'
+PREDICT_DAYS = 57  # 57일로 변경 (어제부터 시작해서 총 57일 예측)
+TRUE_PRICE_PATH = './data/output/coffee_price.csv'
 MARKET_HOLIDAYS = [
     "2025-01-01",  # 신정
     "2025-01-20",  # Martin Luther King Jr. Day
@@ -109,85 +110,89 @@ def generate_future_rows_with_lag(data, start_date, days=56):
         rows.append(r)
     return pd.DataFrame(rows)
 
-def predict_future_prices(pipe, full_data, cat_cols, num_cols, days=56):
-    """미래 가격을 예측하고 실제 가격으로 보정하여 coffee_price.csv에 저장합니다."""
-    # 기존 데이터 로드 또는 새로 생성
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    try:
-        existing = pd.read_csv(OUTPUT_PATH)
-        existing['Date'] = pd.to_datetime(existing['Date'])
-    except FileNotFoundError:
-        existing = pd.DataFrame(columns=['Date', 'Prediction', 'True'])
-        existing['Date'] = pd.to_datetime(existing['Date'])
-    
-    # 오늘 날짜 설정
+def predict_future_prices(pipe, full_data, cat_cols, num_cols, days=57):
+    """미래 가격을 예측하고 실제 가격으로 보정하여 저장합니다."""
+    # 오늘 날짜 설정 및 파일명 생성
     today = pd.Timestamp.today().normalize()
+    yesterday = today - pd.Timedelta(days=1)  # 어제 날짜 계산
+    today_str = today.strftime('%Y%m%d')
+    prediction_filename = f'./data/output/prediction_{today_str}.csv'
     print(f"📅 오늘 날짜: {today.date()}")
+    print(f"📅 어제 날짜: {yesterday.date()} (시차 보정 시작일)")
     
-    # 예측 시작일: 마지막 True 값 다음 날
-    true_prices = existing[existing['True'].notna()]
-    if not true_prices.empty:
-        last_true_date = true_prices['Date'].max()
-        start_date = last_true_date + pd.Timedelta(days=1)
+    # 실제 가격 데이터 로드
+    try:
+        true_prices = pd.read_csv(TRUE_PRICE_PATH)
+        true_prices['Date'] = pd.to_datetime(true_prices['Date'])
+    except FileNotFoundError:
+        print(f"⚠️ 실제 가격 파일 {TRUE_PRICE_PATH}를 찾을 수 없습니다.")
+        true_prices = pd.DataFrame(columns=['Date', 'True_Price'])
+        true_prices['Date'] = pd.to_datetime(true_prices['Date'])
+    
+    # 마지막 실제 가격 찾기 (어제 또는 그 이전의 가장 최근 데이터)
+    if not true_prices.empty and 'True_Price' in true_prices.columns:
+        # 어제 이전의 가격 데이터만 필터링
+        past_prices = true_prices[true_prices['Date'] <= yesterday]
+        valid_true_prices = past_prices[past_prices['True_Price'].notna()]
+        
+        if not valid_true_prices.empty:
+            latest_date = valid_true_prices['Date'].max()
+            latest_price = valid_true_prices.loc[valid_true_prices['Date'] == latest_date, 'True_Price'].iloc[0]
+            print(f"✅ {latest_date.date()} 기준 실제 가격: {latest_price:.2f} USD")
+            
+            # 마지막 실제 가격과 어제 날짜 간의 차이 확인
+            date_gap = (yesterday - latest_date).days
+            if date_gap > 5:  # 5일 이상 차이나면 경고
+                print(f"⚠️ 경고: 최근 실제 가격이 {date_gap}일 전 데이터입니다.")
+        else:
+            latest_date = None
+            latest_price = None
+            print("⚠️ 실제 가격 데이터가 없습니다.")
     else:
-        start_date = today
-    print(f"📈 예측 시작일: {start_date.date()}")
+        latest_date = None
+        latest_price = None
+        print("⚠️ 실제 가격 데이터가 없습니다.")
+    
+    # 예측 시작일: 어제부터 시작 (시차 보정)
+    start_date = yesterday
+    print(f"📈 예측 시작일: {start_date.date()} (어제부터 시작)")
     
     # 예측
     fut = generate_future_rows_with_lag(full_data, start_date, days)
     fut = preprocess_data(fut)
     Xf = fut[cat_cols + num_cols]
-    fut['Prediction'] = pipe.predict(Xf)
+    fut['Prediction_Price'] = pipe.predict(Xf)
     
     # 예측 결과 데이터프레임 준비
-    pred = fut[['Date', 'Prediction']]
-    
-    # 오늘 날짜 기준으로 데이터 처리
-    today = pd.Timestamp.today().normalize()
-    
-    # 최신 실제 가격 찾기 (병합 전에 수행)
-    latest_price = None
-    latest_date = None
-    
-    # True 값이 있는 가장 최근 날짜 찾기
-    true_prices = existing[existing['True'].notna()]
-    if not true_prices.empty:
-        latest_date = true_prices['Date'].max()
-        latest_price = true_prices.loc[true_prices['Date'] == latest_date, 'True'].iloc[0]
-        print(f"✅ {latest_date.date()} 기준 실제 가격: {latest_price:.2f} USD")
-    
-    # 오늘 날짜의 예측값을 실제 가격으로 교체
-    if latest_date == today:
-        pred.loc[pred['Date'] == today, 'Prediction'] = latest_price
-        print(f"✅ 오늘({today.date()})의 예측값을 실제 가격으로 교체: {latest_price:.2f} USD")
+    pred = fut[['Date', 'Prediction_Price']]
     
     # 예측값 보정
     if latest_price is not None:
-        future_preds = pred[pred['Date'] > today]
+        future_preds = pred.copy()
         if not future_preds.empty:
-            first_pred = future_preds['Prediction'].iloc[0]
+            first_pred = future_preds['Prediction_Price'].iloc[0]
             
             # 차이값 계산 (실제 가격 - 예측값)
             difference = latest_price - first_pred
             
             # 모든 미래 예측값에 차이값을 더함
-            pred.loc[pred['Date'] > today, 'Prediction'] += difference
+            pred['Prediction_Price'] += difference
             
             # 급격한 변화 완화
             prev_price = latest_price
-            for idx, row in pred[pred['Date'] > today].iterrows():
-                current_price = row['Prediction']
+            for idx, row in pred.iterrows():
+                current_price = row['Prediction_Price']
                 price_change = abs(current_price - prev_price)
                 
                 if price_change > 20:  # $20 이상 변화하는 경우
-                    # 변화폭을 절반으로 줄임
+                    # 변화폭을 30%로 줄임
                     direction = 1 if current_price > prev_price else -1
                     adjusted_change = direction * (price_change * 0.3)
                     adjusted_price = prev_price + adjusted_change
-                    pred.loc[idx, 'Prediction'] = adjusted_price
+                    pred.loc[idx, 'Prediction_Price'] = adjusted_price
                     print(f"⚠️ 급격한 변화 감지 (${price_change:.1f}) - {row['Date'].date()}: {current_price:.2f} → {adjusted_price:.2f}")
                 
-                prev_price = pred.loc[idx, 'Prediction']
+                prev_price = pred.loc[idx, 'Prediction_Price']
             
             print(f"✅ 미래 예측값 보정:")
             print(f"- 최근 실제 가격: {latest_price:.2f} USD")
@@ -196,62 +201,52 @@ def predict_future_prices(pipe, full_data, cat_cols, num_cols, days=56):
     else:
         print("⚠️ 최근 실제 가격을 찾을 수 없어 보정하지 않습니다")
     
-    # 예측 결과를 기존 데이터와 병합
-    combined = pd.merge(existing, pred, on='Date', how='outer', suffixes=('_old', ''))
-    
-    # 기존 데이터 보존하면서 새로운 데이터만 업데이트
-    combined['Prediction'] = np.where(
-        combined['Date'] > today,  # 오늘 이후 데이터
-        combined['Prediction'],    # 새로운 예측값
-        combined['Prediction_old'] # 기존 예측값
-    )
-    
-    # True 컬럼 유지 (새로운 값이 없으므로 기존값 그대로 사용)
-    combined['True'] = combined['True']
-    
-    # 필요한 컬럼만 선택
-    final = combined[['Date', 'Prediction', 'True']].sort_values('Date')
-    
     # 휴장일 표시 및 가격 채우기
-    final['Market_Closed'] = final['Date'].apply(is_market_closed)
+    pred['Market_Closed'] = pred['Date'].apply(is_market_closed)
     
-    today = pd.Timestamp.today().normalize()
-    
-    # Prediction 컬럼의 휴장일 가격을 이전 거래일 가격으로 채우기 (오늘 이후만)
+    # 휴장일 가격을 이전 거래일 가격으로 채우기
     last_prediction = None
-    for date, row in final.iterrows():
-        if row['Date'] > today:  # 오늘 이후의 데이터만 처리
-            if row['Market_Closed']:
-                if pd.notna(last_prediction):
-                    final.loc[date, 'Prediction'] = last_prediction
-            else:
-                if pd.notna(row['Prediction']):
-                    last_prediction = row['Prediction']
+    for idx, row in pred.iterrows():
+        if row['Market_Closed']:
+            if pd.notna(last_prediction):
+                pred.loc[idx, 'Prediction_Price'] = last_prediction
+        else:
+            if pd.notna(row['Prediction_Price']):
+                last_prediction = row['Prediction_Price']
     
     # 저장 전 Market_Closed 컬럼 제거
-    final_save = final.drop('Market_Closed', axis=1)
-    final_save.to_csv(OUTPUT_PATH, index=False)
+    final_save = pred.drop('Market_Closed', axis=1)
     
-    print(f"✅ 예측 결과 저장 완료: {OUTPUT_PATH}")
-    print(f"- 기간: {final['Date'].min()} ~ {final['Date'].max()}")
+    # 예측 결과 저장
+    os.makedirs(os.path.dirname(prediction_filename), exist_ok=True)
+    final_save.to_csv(prediction_filename, index=False)
+    print(f"✅ 예측 결과 저장 완료: {prediction_filename}")
+    print(f"- 기간: {pred['Date'].min().date()} ~ {pred['Date'].max().date()}")
+    print(f"- 총 예측일: {days}일 (어제부터 시작)")
+    
+    # 시각화를 위해 실제 값 가져오기
+    combined = pd.merge(true_prices, pred, on='Date', how='outer')
     
     # 시각화
     plt.figure(figsize=(12,5))
     
     # 실제값과 예측값 구분해서 플롯
-    plt.plot(final['Date'], final['True'], 
+    plt.plot(combined['Date'], combined['True_Price'], 
             label='실제 가격', color='blue', zorder=2)
-    plt.plot(final['Date'], final['Prediction'], 
+    plt.plot(combined['Date'], combined['Prediction_Price'], 
             label='예측 가격', color='red', linestyle='--', zorder=1)
     
+    # 오늘 날짜 표시선 추가
+    plt.axvline(x=today, color='green', linestyle='-', alpha=0.7, label='오늘')
+    
     # 휴장일 표시
-    closed_days = final[final['Market_Closed']]
+    closed_days = combined[combined['Date'].apply(is_market_closed)]
     if not closed_days.empty:
-        plt.scatter(closed_days['Date'], closed_days['True'],
+        plt.scatter(closed_days['Date'], closed_days['True_Price'], 
                     color='gray', alpha=0.5, s=30,
                     label='휴장일', zorder=3)
     
-    plt.title(f"최근 실제 + 향후 {days}일 예측")
+    plt.title(f"최근 실제 + 향후 {days}일 예측 (어제부터 시작)")
     plt.xlabel("Date")
     plt.ylabel("Price (USD)")
     plt.grid(True, alpha=0.3)
@@ -259,10 +254,10 @@ def predict_future_prices(pipe, full_data, cat_cols, num_cols, days=56):
     plt.tight_layout()
     
     # 이미지 저장
-    plt.savefig('./data/output/prediction_plot.png', dpi=300, bbox_inches='tight')
+    plt.savefig(f'./data/output/prediction_plot_{today_str}.png', dpi=300, bbox_inches='tight')
     plt.show()
     
-    return final
+    return pred
 
 # Main
 if __name__ == "__main__":
