@@ -78,10 +78,10 @@ def load_and_prepare_data(macro_data_path, climate_data_path):
     # 기후 데이터 로딩 및 병합
     we = pd.read_csv(climate_data_path)
     we.drop(columns=['Coffee_Price'], inplace=True, errors='ignore')
-    df = pd.merge(df, we, on='Date', how='left')
+    df = pd.merge(df, we, on='Date', how='left') # ->  left join으로 2023년 데이터까지만 사용
     
     # 결측치 제거 및 날짜 인덱스 설정
-    df = df.dropna()
+    df = df.dropna() # ->  결측치를 어떻게 처리할지 결정해야 함. 현재는 단순히 제거
     df['Date'] = pd.to_datetime(df['Date'])
     df.set_index('Date', inplace=True)
     

@@ -1,7 +1,7 @@
 """
 Attention LSTM 모델 메인 실행 모듈 (Main Execution Module)
 
-이 모듈은 Attention LSTM 모델 파이프라인을 실행하는 메인 코드다.
+이 모듈은 Attention LSTM 모델 파이프라인을 실행하는 메인 코드이다.
 데이터 로딩, 전처리, 모델 학습, 예측, 및 결과 저장을 포함하는 전체 프로세스를 조정한다.
 
 주요 기능:
@@ -69,17 +69,19 @@ def main(macro_data_path, climate_data_path, output_path='./data/output/',
     """
     # 디바이스 설정
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(f"Using device: {device}")
+    print(f"디바이스 설정: {device}")
     
     # 데이터 로드 및 전처리
     df = load_and_prepare_data(macro_data_path, climate_data_path)
-    print(f"Data loaded with shape: {df.shape}")
+    print(f"데이터 로드 - shape: {df.shape}")
     
-    # 학습/테스트 분할
+    # 학습/테스트 분할(현재는 80% 학습, 20% 테스트)
+    # -> 랜덤이 아닌 시계열 데이터의 특성을 고려하여 분할
     train_df, test_df = train_test_split(df)
-    print(f"Training data: {train_df.shape}, Test data: {test_df.shape}")
+    print(f"Train data: {train_df.shape}, Test data: {test_df.shape}")
     
-    # 데이터 스케일링
+    # 데이터 스케일링 
+    # -> 현재는 MinMaxScaler 사용
     scaled_train_df, scaler = scale_data(train_df)
     
     # 학습 데이터 준비
