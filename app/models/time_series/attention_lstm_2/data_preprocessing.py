@@ -124,8 +124,8 @@ def scale_data(train_df, test_df=None, preserve_return=True, preserve_price=Fals
         
     Returns:
         tuple: 스케일링된 데이터와 스케일러를 포함한 튜플
-               test_df가 제공된 경우: (scaled_train_df, scaled_test_df, scaler)
-               아닌 경우: (scaled_train_df, scaler)
+        test_df가 제공된 경우: (scaled_train_df, scaled_test_df, scaler)
+        아닌 경우: (scaled_train_df, scaler)
     """
     scaler = MinMaxScaler()
     
@@ -183,8 +183,8 @@ def scale_data_except_price(train_df, test_df=None):
         
     Returns:
         tuple: 스케일링된 데이터와 스케일러를 포함한 튜플
-               test_df가 제공된 경우: (scaled_train_df, scaled_test_df, scaler)
-               아닌 경우: (scaled_train_df, scaler)
+                test_df가 제공된 경우: (scaled_train_df, scaled_test_df, scaler)
+                아닌 경우: (scaled_train_df, scaler)
     """
     # 가격 컬럼만 제외한 스케일링
     return scale_data(train_df, test_df, preserve_return=True, preserve_price=True)

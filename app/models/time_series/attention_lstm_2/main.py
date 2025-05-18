@@ -3,7 +3,7 @@ Attention LSTM 모델 메인 실행 모듈 (Main Execution Module)
 
 이 모듈은 Attention LSTM 모델 파이프라인을 실행하는 메인 코드다.
 데이터 로딩, 전처리, 모델 학습, 예측, 및 결과 저장을 포함하는 전체 프로세스를 조정한다.
-버전 2는 더 세밀한 특성 엔지니어링과 최적화된 하이퍼파라미터를 사용한다.
+버전 3는 확장된 기능과 최적화된 하이퍼파라미터를 제공한다.
 
 주요 기능:
 1. 명령행 인수 처리
@@ -63,9 +63,9 @@ except ImportError:
 
 
 def main(macro_data_path, climate_data_path, output_path='./data/output/', 
-         data_window=50, future_target=14, step=1, batch_size=10, 
-         hidden_size=100, num_epochs=100, do_multiple_predictions=True, 
-         scale_price=True, loss_fn='huber', delta=1.0, alpha=0.6):
+            data_window=50, future_target=14, step=1, batch_size=10, 
+            hidden_size=100, num_epochs=100, do_multiple_predictions=True, 
+            scale_price=False, loss_fn='huber', delta=1.0, alpha=0.6):
     """
     모델 학습 및 예측을 실행하는 메인 함수다.
     
@@ -131,7 +131,7 @@ def main(macro_data_path, climate_data_path, output_path='./data/output/',
     # 모델 학습
     print(f"Starting model training with {num_epochs} epochs...")
     model = train_model(train_loader, model, device, num_epochs=num_epochs, 
-                       loss_fn=loss_fn, delta=delta, alpha=alpha)
+                        loss_fn=loss_fn, delta=delta, alpha=alpha)
     
     # 미래 가격 예측
     print("Predicting future prices...")
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     parser.add_argument('--data_window', type=int, default=50, help='Data window size')
     parser.add_argument('--future_target', type=int, default=14, help='Future prediction days')
     parser.add_argument('--hidden_size', type=int, default=100, help='LSTM hidden size')
-    parser.add_argument('--scale_price', type=lambda x: (str(x).lower() == 'true'), default=True, 
+    parser.add_argument('--scale_price', type=lambda x: (str(x).lower() == 'true'), default=False, 
                         help='Whether to scale price feature (True/False)')
     parser.add_argument('--loss_fn', type=str, default='huber', 
                         choices=['mse', 'huber', 'directional', 'combined'], 
