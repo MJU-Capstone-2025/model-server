@@ -38,7 +38,7 @@ class ResidualTimeSeriesDataset(Dataset):
     
     def __init__(self, dataset, target, residuals=None, data_window=50, 
                 target_size=14, step=1, single_step=False, 
-                residual_window=5, use_residuals=True):
+                residual_window=7, use_residuals=True):
         """
         데이터셋 초기화
         
@@ -114,7 +114,6 @@ class ResidualTimeSeriesDataset(Dataset):
             return self.data[idx], self.residuals[idx], self.labels[idx]
         else:
             return self.data[idx], self.labels[idx]
-    
     def update_residuals(self, new_residuals):
         """
         새로운 잔차 데이터로 기존 데이터셋을 업데이트한다.
@@ -143,36 +142,72 @@ class ResidualTimeSeriesDataset(Dataset):
         if len(new_residuals.shape) == 1:
             new_residuals = new_residuals.reshape(-1, 1)
         
-        # 차원 확인 - 우리가 예상하는 차원 수는 2 (샘플 수, 특성 수)
-        if len(new_residuals.shape) != 2:
-            print(f"WARNING: Expected 2D new_residuals, got shape {new_residuals.shape}")
-            # 필요하면 추가 차원 변환 로직 추가
+        # 3차원 residuals 처리 (batch_size, residual_window, feature_size)
+        if len(residuals_np.shape) == 3:
+            batch_size = min(len(residuals_np), len(new_residuals))
+            window_size = residuals_np.shape[1]
+            feature_size = residuals_np.shape[2]
             
-        # 데이터 형태 확인
-        # residuals_np의 크기가 (1850, 14)이고 new_residuals의 크기가 (5, 14)인 경우
-        min_samples = min(len(residuals_np), len(new_residuals))
-        
-        # 각 샘플에 대해 가장 최근의 잔차 윈도우만 사용
-        # 각 샘플마다 독립적으로 처리
-        for i in range(min_samples):
-            # 마지막 열의 크기 검사
-            if new_residuals.shape[1] != residuals_np.shape[1]:
-                print(f"WARNING: Feature dimension mismatch: residuals_np[{i}].shape[1]={residuals_np.shape[1]}, new_residuals[{i}].shape[1]={new_residuals.shape[1]}")
-                # 재조정이 필요할 수 있음
-                if new_residuals.shape[1] == 1:
-                    # new_residuals는 scalar value로 가정하고 residuals_np의 모든 열에 동일한 값 복사
-                    new_value = new_residuals[i, 0]
+            print(f"DEBUG: Handling 3D residuals with shape {residuals_np.shape}")
+            
+            # 각 샘플 배치에 대해 처리
+            for i in range(batch_size):
+                if i < len(new_residuals):
+                    # 기존 윈도우를 한 칸 이동시킨다 (첫 번째 항목 버림)
                     residuals_np[i] = np.roll(residuals_np[i], -1, axis=0)
-                    residuals_np[i, -1] = np.full(residuals_np.shape[1], new_value)
+                    
+                    # 새 잔차 데이터 형태 처리
+                    if len(new_residuals.shape) == 2:
+                        if new_residuals.shape[1] == feature_size:
+                            # 새 잔차와 특성 차원이 일치하는 경우 직접 업데이트
+                            residuals_np[i, -1] = new_residuals[i]
+                        elif new_residuals.shape[1] == 1:
+                            # 새 잔차가 스칼라인 경우 전체 feature에 복제
+                            residuals_np[i, -1] = np.full(feature_size, new_residuals[i, 0])
+                        else:
+                            # 차원이 맞지 않을 경우 처리
+                            print(f"DEBUG: Reshaping new_residuals from shape {new_residuals.shape} to match feature size {feature_size}")
+                            # 특성 차원을 맞추기 위해 잘라내거나 패딩
+                            if new_residuals.shape[1] > feature_size:
+                                # 너무 클 경우 자르기
+                                residuals_np[i, -1] = new_residuals[i, :feature_size]
+                            else:
+                                # 작을 경우 패딩
+                                padded = np.zeros(feature_size)
+                                padded[:new_residuals.shape[1]] = new_residuals[i]
+                                residuals_np[i, -1] = padded
+        else:
+            # 기존 2차원 처리 로직 유지
+            min_samples = min(len(residuals_np), len(new_residuals))
+            
+            # 각 샘플에 대해 처리
+            for i in range(min_samples):
+                # 특성 차원이 일치하지 않는 경우
+                if new_residuals.shape[1] != residuals_np.shape[1]:
+                    print(f"WARNING: Feature dimension mismatch: residuals_np[{i}].shape[1]={residuals_np.shape[1]}, new_residuals[{i}].shape[1]={new_residuals.shape[1]}")
+                    
+                    if new_residuals.shape[1] == 1:
+                        # 스칼라인 경우 복제
+                        new_value = new_residuals[i, 0]
+                        residuals_np[i] = np.roll(residuals_np[i], -1, axis=0)
+                        residuals_np[i, -1] = np.full(residuals_np.shape[1], new_value)
+                    else:
+                        # 차원이 맞지 않는 경우 처리
+                        print(f"DEBUG: Reshaping new_residuals[{i}] from size {new_residuals.shape[1]} to {residuals_np.shape[1]}")
+                        if new_residuals.shape[1] > residuals_np.shape[1]:
+                            # 잘라내기
+                            residuals_np[i] = np.roll(residuals_np[i], -1, axis=0)
+                            residuals_np[i, -1] = new_residuals[i, :residuals_np.shape[1]]
+                        else:
+                            # 패딩
+                            residuals_np[i] = np.roll(residuals_np[i], -1, axis=0)
+                            padded = np.zeros(residuals_np.shape[1])
+                            padded[:new_residuals.shape[1]] = new_residuals[i]
+                            residuals_np[i, -1] = padded
                 else:
-                    print(f"ERROR: Cannot handle feature dimension mismatch - skipping sample {i}")
-                    continue
-            else:
-                # 잔차 윈도우 유지하면서 마지막 요소만 업데이트
-                # 기존 윈도우를 한 칸 앞으로 이동시키고, 마지막에 새 잔차 추가
-                residuals_np[i] = np.roll(residuals_np[i], -1, axis=0)
-                # 각 샘플의 마지막 잔차 위치에 새 잔차 값 삽입
-                residuals_np[i, -1] = new_residuals[i]
+                    # 차원이 일치하는 경우 그대로 업데이트
+                    residuals_np[i] = np.roll(residuals_np[i], -1, axis=0)
+                    residuals_np[i, -1] = new_residuals[i]
         
         # 업데이트된 잔차를 다시 텐서로 변환
         self.residuals = torch.tensor(residuals_np, dtype=torch.float32)
