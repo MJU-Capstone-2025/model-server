@@ -110,6 +110,7 @@ def train_test_split(df, train_size=0.8):
     test_df = df.iloc[split_idx:]
     print(f"test_df start date: {test_df.index[0]}")
     print(f"test_df end date: {test_df.index[-1]}")
+    print(f"length of test_df: {len(test_df)}일")
     return train_df, test_df
 
 

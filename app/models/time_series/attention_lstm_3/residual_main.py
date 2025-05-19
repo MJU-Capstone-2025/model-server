@@ -23,6 +23,9 @@ import os
 import sys
 from datetime import datetime
 import numpy as np
+import pandas as pd  # 추가된 임포트
+import matplotlib.pyplot as plt
+from collections import defaultdict
 
 # 패키지 경로 설정을 위한 코드
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -44,7 +47,7 @@ try:
     from .residual_model import ResidualAttentionLSTM
     from .training import train_model, predict_future_prices
     from .residual_training import train_with_residuals, predict_with_residuals, compare_models, calculate_residuals
-    from .utils import save_prediction_to_csv, save_model
+    from .utils import save_prediction_to_csv, save_model, save_test_predictions_to_csv
 except ImportError:
     # 직접 실행될 때 사용하는 절대 경로
     try:
@@ -55,7 +58,7 @@ except ImportError:
         from models.time_series.attention_lstm_2.residual_model import ResidualAttentionLSTM
         from models.time_series.attention_lstm_2.training import train_model, predict_future_prices
         from models.time_series.attention_lstm_2.residual_training import train_with_residuals, predict_with_residuals, compare_models, calculate_residuals
-        from models.time_series.attention_lstm_2.utils import save_prediction_to_csv, save_model
+        from models.time_series.attention_lstm_2.utils import save_prediction_to_csv, save_model, save_test_predictions_to_csv
     except ModuleNotFoundError:
         # 디렉토리 내에서 직접 실행할 때
         from data_preprocessing import load_and_prepare_data, train_test_split, scale_data, scale_data_except_price
@@ -65,7 +68,7 @@ except ImportError:
         from residual_model import ResidualAttentionLSTM
         from training import train_model, predict_future_prices
         from residual_training import train_with_residuals, predict_with_residuals, compare_models, calculate_residuals
-        from utils import save_prediction_to_csv, save_model
+        from utils import save_prediction_to_csv, save_model, save_test_predictions_to_csv
 
 
 def main_residual_pipeline(macro_data_path, climate_data_path, output_path='./data/output/', 
@@ -98,22 +101,22 @@ def main_residual_pipeline(macro_data_path, climate_data_path, output_path='./da
     """
     # 디바이스 설정
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(f"Using device: {device}")
+    print(f"> Using device: {device}")
     
     # 데이터 로드 및 전처리
     df = load_and_prepare_data(macro_data_path, climate_data_path)
-    print(f"Data loaded with shape: {df.shape}")
+    print(f"> Data loaded with shape: {df.shape}")
     
     # 학습/테스트 분할
     train_df, test_df = train_test_split(df)
-    print(f"Training data: {train_df.shape}, Test data: {test_df.shape}")
+    print(f"> Training data: {train_df.shape}, Test data: {test_df.shape}")
     
     # 데이터 스케일링
     if scale_price:
-        print("Scaling all features including Coffee_Price...")
+        print("> Scaling all features including Coffee_Price...")
         scaled_train_df, scaled_test_df, scaler = scale_data(train_df, test_df, preserve_return=True)
     else:
-        print("Excluding Coffee_Price from scaling to preserve original price values...")
+        print("> Excluding Coffee_Price from scaling to preserve original price values...")
         scaled_train_df, scaled_test_df, scaler = scale_data_except_price(train_df, test_df)
     
     # 학습 데이터 준비
@@ -138,14 +141,14 @@ def main_residual_pipeline(macro_data_path, climate_data_path, output_path='./da
     ).to(device)
     
     # 기본 모델 학습
-    print(f"Starting base model training with {num_epochs} epochs...")
+    print(f"> Starting base model training with {num_epochs} epochs...")
     base_model = train_model(base_train_loader, base_model, device, num_epochs=num_epochs, 
                             loss_fn=loss_fn, delta=delta, alpha=alpha)
     
     # 단계 2: 기본 모델로 잔차 계산
     print("\n================ STEP 2: Calculating Residuals ================")
     residuals = calculate_residuals(base_model, base_train_dataset, device)
-    print(f"Calculated residuals with shape: {residuals.shape}")
+    print(f"> Calculated residuals with shape: {residuals.shape}")
     
     # 단계 3: 잔차 활용 모델 학습
     print("\n================ STEP 3: Training Residual Model ================")
@@ -165,7 +168,7 @@ def main_residual_pipeline(macro_data_path, climate_data_path, output_path='./da
     ).to(device)
     
     # 잔차 모델 학습
-    print(f"Starting residual model training with {num_epochs} epochs...")
+    print(f"> Starting residual model training with {num_epochs} epochs...")
     residual_model, final_residuals = train_with_residuals(
         residual_train_loader, residual_model, device, 
         num_epochs=num_epochs, loss_fn=loss_fn, delta=delta, alpha=alpha,
@@ -221,8 +224,8 @@ def main_residual_pipeline(macro_data_path, climate_data_path, output_path='./da
         output_path, model_prefix="residual_model"
     )
     
-    print(f"Base model saved to: {base_model_path}")
-    print(f"Residual model saved to: {residual_model_path}")
+    print(f"> Base model saved to: {base_model_path}")
+    print(f"> Residual model saved to: {residual_model_path}")
     
     # 단계 5: 모델 성능 비교 (선택 사항)
     if compare:
@@ -236,11 +239,88 @@ def main_residual_pipeline(macro_data_path, climate_data_path, output_path='./da
         # 향상도 출력
         mae_improvement = comparison_df['MAE Improvement'].iloc[1]
         rmse_improvement = comparison_df['RMSE Improvement'].iloc[1]
-        print(f"\nPerformance Improvement Summary:")
-        print(f"MAE: Improved by {mae_improvement:.2f}%")
-        print(f"RMSE: Improved by {rmse_improvement:.2f}%")
-        
+        print(f"\n> Performance Improvement Summary:")
+        print(f"> MAE: Improved by {mae_improvement:.2f}%")
+        print(f"> RMSE: Improved by {rmse_improvement:.2f}%")
+    
+    # 단계 6: 테스트 세트 전체에 대해 반복적으로 예측 수행
+    print("\n================ STEP 6: Making Full Test Set Predictions ================")
+    base_pred_dict = defaultdict(list)
+    residual_pred_dict = defaultdict(list)
+
+    for start_idx in range(0, len(X_test) - data_window - future_target + 1, 1):  # step=1
+        test_window = X_test[start_idx:start_idx + data_window]
+        test_window = test_window[np.newaxis, :, :]  # 배치 차원 추가
+
+        # 기본 모델 예측
+        base_pred, _ = base_model(torch.tensor(test_window, dtype=torch.float32).to(device))
+        base_forecast = base_pred.cpu().detach().numpy()
+
+        # 잔차 모델 예측
+        residual_pred, _ = residual_model(torch.tensor(test_window, dtype=torch.float32).to(device))
+        residual_forecast = residual_pred.cpu().detach().numpy()
+
+        # === 역스케일링 ===
+        if scale_price:
+            dummy = np.zeros((future_target, X_test.shape[1] - 1))
+            base_inv = scaler.inverse_transform(np.concatenate([base_forecast.reshape(-1, 1), dummy], axis=1))[:, 0]
+            residual_inv = scaler.inverse_transform(np.concatenate([residual_forecast.reshape(-1, 1), dummy], axis=1))[:, 0]
+        else:
+            base_inv = base_forecast.flatten()
+            residual_inv = residual_forecast.flatten()
+
+        # 날짜 계산
+        start_date = test_df.index[start_idx + data_window]
+        forecast_dates = pd.date_range(start=start_date, periods=future_target)
+
+        # 날짜별로 예측값 누적
+        for d, b, r in zip(forecast_dates, base_inv, residual_inv):
+            base_pred_dict[d].append(b)
+            residual_pred_dict[d].append(r)
+
+    # 날짜별 평균 계산 및 저장
+    all_dates = sorted(set(base_pred_dict.keys()) & set(residual_pred_dict.keys()))
+    all_test_predictions = []
+    all_test_dates = []
+    for d in all_dates:
+        base_avg = np.mean(base_pred_dict[d])
+        residual_avg = np.mean(residual_pred_dict[d])
+        all_test_predictions.append((d, base_avg, residual_avg))
+        all_test_dates.append(d)
+
+    test_predictions_path = os.path.join(output_path, "test_predictions.csv")
+    save_test_predictions_to_csv(all_test_dates, 
+                                [pred[1] for pred in all_test_predictions], 
+                                [pred[2] for pred in all_test_predictions], 
+                                test_predictions_path)
+    print(f"Test set predictions with dates saved to: {test_predictions_path}")
+    
     return base_model, residual_model, residual_forecast
+
+
+def plot_test_predictions_with_actual(csv_path, macro_data_path, climate_data_path, output_path='./data/output/'):
+    """
+    test_predictions.csv와 실제 커피 가격을 한 그래프에 시각화한다.
+    """
+    # 예측 결과 CSV 읽기
+    df_pred = pd.read_csv(csv_path, parse_dates=['Date'])
+    # 실제 데이터 로드
+    df_actual = load_and_prepare_data(macro_data_path, climate_data_path)
+    # 실제값에서 예측 구간만 추출
+    df_actual = df_actual.loc[df_pred['Date'].min():df_pred['Date'].max()]
+    # 그래프 그리기
+    plt.figure(figsize=(16, 7))
+    plt.plot(df_pred['Date'], df_pred['Base Model Predictions'], label='Base Model', color='red', linestyle='--')
+    plt.plot(df_pred['Date'], df_pred['Residual Model Predictions'], label='Residual Model', color='green', linestyle=':')
+    plt.plot(df_actual.index, df_actual['Coffee_Price'], label='Actual Price', color='blue', linewidth=2)
+    plt.title('Test Set Prediction vs Actual Coffee Price')
+    plt.xlabel('Date')
+    plt.ylabel('Coffee Price')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_path, 'test_predictions_plot.png'), dpi=300)
+    plt.close()
 
 
 if __name__ == "__main__":
@@ -284,4 +364,13 @@ if __name__ == "__main__":
         alpha=args.alpha,
         residual_window=args.residual_window,
         compare=args.compare
+    )
+
+    # test_predictions.csv 시각화
+    test_pred_csv = os.path.join(args.output_path, 'test_predictions.csv')
+    plot_test_predictions_with_actual(
+        test_pred_csv,
+        args.macro_data,
+        args.climate_data,
+        output_path=args.output_path
     )

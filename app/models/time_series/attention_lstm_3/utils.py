@@ -138,3 +138,29 @@ def load_model(model_path, device='cpu'):
     metrics = checkpoint.get('metrics', {})
     
     return model, scaler, hyperparameters, metrics
+
+
+def save_test_predictions_to_csv(dates, base_predictions, residual_predictions, output_path):
+    """
+    Save test predictions to a CSV file.
+
+    Args:
+        dates (list or pd.DatetimeIndex): List of dates corresponding to predictions.
+        base_predictions (list or np.ndarray): Predictions from the base model.
+        residual_predictions (list or np.ndarray): Predictions from the residual model.
+        output_path (str): Path to save the CSV file.
+
+    Returns:
+        str: Path to the saved CSV file.
+    """
+    # Create a DataFrame
+    test_predictions_df = pd.DataFrame({
+        "Date": dates,
+        "Base Model Predictions": base_predictions,
+        "Residual Model Predictions": residual_predictions
+    })
+
+    # Save to CSV
+    test_predictions_df.to_csv(output_path, index=False)
+    print(f"Test predictions saved to: {output_path}")
+    return output_path
