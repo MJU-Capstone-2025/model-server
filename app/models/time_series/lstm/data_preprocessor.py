@@ -6,6 +6,7 @@
 
 import pandas as pd
 import os
+from .model import *
 
 def load_weather_data(data_path=None):
     """
@@ -57,7 +58,9 @@ def leave_PRECTOTCORR_columns(df):
     
     # 남길 컬럼들
     keep_cols = ['Date', 'Coffee_Price', 'Coffee_Price_Return'] \
-        + prectotcorr_cols + season_tag_cols + until_cols
+        + prectotcorr_cols \
+        + until_cols \
+        + season_tag_cols
     
     # 남길 컬럼들로 필터링
     df = df[keep_cols]
@@ -76,3 +79,100 @@ def split_data(df, train_ratio=0.8):
     
     print(f"✅ 데이터 분할 성공: {train_data.shape}, {test_data.shape}")
     return train_data, test_data
+
+
+def add_volatility_features(df, price_col='Coffee_Price', return_col='Coffee_Price_Return'):
+    """변동성 관련 파생 피처 추가"""
+    
+    # 날짜 컬럼을 인덱스로 설정
+    df['Date'] = pd.to_datetime(df['Date'])
+    df.set_index('Date', inplace=True)
+    
+    # 1. 절대 수익률
+    df['Abs_Return'] = np.abs(df[return_col])
+    
+    # 2. n일 변동성
+    for n in [5, 10, 20]:
+        df[f'Volatility_{n}d'] = df[return_col].rolling(window=n).std()
+    
+    # 3. 모멘텀 (n일 전 대비 가격 변화)
+    for n in [5, 10, 20]:
+        df[f'Momentum_{n}d'] = df[price_col] / df[price_col].shift(n) - 1
+    
+    # 4. 볼린저 밴드 너비
+    for n in [20]:
+        rolling_mean = df[price_col].rolling(window=n).mean()
+        rolling_std = df[price_col].rolling(window=n).std()
+        df[f'BB_Width_{n}d'] = (rolling_mean + 2*rolling_std - (rolling_mean - 2*rolling_std)) / rolling_mean
+    
+    # 5. Z-score (현재 가격이 과거 n일 평균에서 얼마나 떨어져 있는지)
+    for n in [20]:
+        rolling_mean = df[price_col].rolling(window=n).mean()
+        rolling_std = df[price_col].rolling(window=n).std()
+        df[f'Z_Score_{n}d'] = (df[price_col] - rolling_mean) / rolling_std
+    
+    # NaN 값 제거
+    df.dropna(inplace=True)
+    
+    print(f"✅ 변동성 관련 파생 피처 추가 성공: {df.shape}")
+    return df
+
+def prepare_data_for_model(train_data, test_data):
+    """모델 학습을 위한 데이터 준비"""
+    
+    # 날짜 정보 저장
+    train_dates = train_data.index
+    test_dates = test_data.index
+    
+    # 정규화를 위한 스케일러
+    scaler = MinMaxScaler()
+    train_scaled = scaler.fit_transform(train_data)
+    test_scaled = scaler.transform(test_data)
+    
+    # 시퀀스 생성 (50일 데이터로 14일 예측)
+    seq_length = 50
+    pred_length = 14
+    
+    X_train, y_train = create_sequences(train_scaled, seq_length, pred_length)
+    X_test, y_test = create_sequences(test_scaled, seq_length, pred_length)
+    
+    print(f"✅ 시퀀스 생성 완료 - X_train: {X_train.shape}, y_train: {y_train.shape}")
+    print(f"✅ 시퀀스 생성 완료 - X_test: {X_test.shape}, y_test: {y_test.shape}")
+    
+    # 데이터셋 및 데이터로더 생성
+    train_dataset = TimeSeriesDataset(torch.FloatTensor(X_train), torch.FloatTensor(y_train))
+    test_dataset = TimeSeriesDataset(torch.FloatTensor(X_test), torch.FloatTensor(y_test))
+    
+    batch_size = 32
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    
+    return train_loader, test_loader, scaler, test_dates[-len(X_test):], seq_length, pred_length
+
+def encode_categorical_features(df):
+    """범주형 특성을 원-핫 인코딩"""
+    
+    # season_tag 컬럼 찾기
+    season_tag_cols = [col for col in df.columns if 'season_tag' in col]
+    
+    if not season_tag_cols:
+        print("⚠️ 범주형 특성이 없습니다.")
+        return df
+    
+    # 각 season_tag 컬럼에 대해 원-핫 인코딩 진행
+    for col in season_tag_cols:
+        # 고유값 출력
+        unique_values = df[col].unique()
+        
+        # 원-핫 인코딩
+        dummies = pd.get_dummies(df[col], prefix=col, drop_first=False)
+        
+        # 원본 데이터프레임에 원-핫 인코딩 컬럼 추가
+        df = pd.concat([df, dummies], axis=1)
+        
+        # 원본 범주형 컬럼 제거
+        df = df.drop(columns=[col])
+    
+    print(f"✅ 범주형 특성 인코딩 성공: {df.shape}")
+    return df
+
