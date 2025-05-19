@@ -31,6 +31,7 @@ async def lifespan(app: FastAPI):
         delta = float(os.environ.get("COFFEE_MODEL_DELTA", "1.0"))
         epochs = int(os.environ.get("COFFEE_MODEL_EPOCHS", "5"))
         lr = float(os.environ.get("COFFEE_MODEL_LR", "0.001"))
+        online_flag = os.getenv("COFFEE_MODEL_ONLINE", "false").lower() == "true"
         
         print(f"📊 모델 하이퍼파라미터 - 손실 함수: {loss_fn}, Delta: {delta}, 에폭: {epochs}, 학습률: {lr}")
 
@@ -40,7 +41,8 @@ async def lifespan(app: FastAPI):
             loss_fn=loss_fn,
             delta=delta,
             epochs=epochs,
-            lr=lr
+            lr=lr,
+            online=online_flag
         )
         print("✅ LSTM 모델 로드 완료")
         
@@ -148,7 +150,8 @@ async def train_model(
     loss_fn: str = Query("mse", description="손실 함수 (mse 또는 huber)"),
     delta: float = Query(1.0, description="Huber loss의 delta 값"),
     epochs: int = Query(5, description="훈련 에폭 수"),
-    lr: float = Query(0.001, description="학습률")
+    lr: float = Query(0.001, description="학습률"),
+    online_flag: bool = Query(False, description="온라인 업데이트 방식으로 예측 수행")
 ):
     """모델 재학습 엔드포인트"""
     try:
@@ -171,7 +174,8 @@ async def train_model(
             loss_fn=loss_fn,
             delta=delta,
             epochs=epochs,
-            lr=lr
+            lr=lr,
+            online=online_flag
         )
         
         # 모델 결과 저장

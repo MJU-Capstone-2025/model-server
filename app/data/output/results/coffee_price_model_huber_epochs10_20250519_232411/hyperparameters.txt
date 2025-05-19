@@ -1,6 +1,0 @@
-loss_function: huber
-delta: 0.5
-epochs: 10
-learning_rate: 0.001
-mae: 25.097747802734375
-rmse: 39.79576110839844

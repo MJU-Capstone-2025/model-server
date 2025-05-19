@@ -46,9 +46,12 @@ def parse_arguments():
     parser.add_argument('--lr', type=float, default=0.001,
                         help='학습률')
     
+    parser.add_argument('--online', action='store_true',
+                    help='온라인 업데이트 방식으로 예측 수행')
+
     return parser.parse_args()
 
-def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001):
+def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
     """
     메인 실행 함수
     
@@ -106,7 +109,30 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001):
         )
         
         # 9. 모델 평가
-        predictions, actuals, attention_weights, mae, rmse = predict_and_evaluate(model, test_loader, scaler, device)
+        if online:
+            print("🔄 온라인 업데이트 방식으로 예측 수행 중...")
+
+            test_data_array = test_data.values if hasattr(test_data, 'values') else test_data
+
+            predictions, actuals = online_update_prediction(
+                model=model,
+                test_data=scaler.transform(test_data_array),
+                scaler=scaler,
+                seq_length=seq_length,
+                pred_length=pred_length,
+                device=device,
+                lr=lr,
+                loss_fn=loss_fn
+            )
+
+            attention_weights = None  # 온라인 방식에서는 attention 저장하지 않음
+            mae = np.mean(np.abs(predictions.flatten() - actuals.flatten()))
+            rmse = np.sqrt(np.mean((predictions.flatten() - actuals.flatten())**2))
+
+        else:
+            predictions, actuals, attention_weights, mae, rmse = predict_and_evaluate(
+                model, test_loader, scaler, device
+            )
         
         # 10. 결과 저장 - 폴더 생성 및 결과 저장
         # 저장 폴더 이름 생성: loss 함수 및 에폭 정보 포함
@@ -207,5 +233,6 @@ if __name__ == "__main__":
         loss_fn=args.loss_fn,
         delta=args.delta,
         epochs=args.epochs,
-        lr=args.lr
+        lr=args.lr,
+        online=args.online
     )

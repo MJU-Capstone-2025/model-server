@@ -419,7 +419,7 @@ def predict_and_evaluate(model, test_loader, scaler, device='cpu'):
     
     return predictions_rescaled, actuals_rescaled, attention_weights, mae, rmse
 
-# 슬라이딩 윈도우 예측 데이터 생성 함수 (시각화 없이 데이터만 생성)
+# 슬라이딩 윈도우 예측 데이터 생성 함수
 def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stride=1, device='cpu'):
     """슬라이딩 윈도우 방식으로 예측"""
     model.eval()
@@ -440,19 +440,39 @@ def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stri
             with torch.no_grad():
                 prediction, _ = model(sequence_tensor)
                 prediction = prediction.cpu().numpy()
-            
+
             # 역정규화
             try:
-                pad_width = scaler.scale_.shape[0] - prediction.shape[1]
-                padded_prediction = np.pad(prediction, ((0, 0), (0, pad_width)), 'constant')
-                padded_actual = np.pad(actual.reshape(-1, 1), ((0, 0), (0, scaler.scale_.shape[0]-1)), 'constant')
-                
-                prediction_rescaled = scaler.inverse_transform(padded_prediction)[..., 0]
-                actual_rescaled = scaler.inverse_transform(padded_actual)[..., 0]
+                # 예측 결과 shape: (1, pred_length)
+                prediction = prediction[0]  # shape: (pred_length,)
+
+                # 실제 값도 동일하게
+                actual = actual.reshape(-1)  # shape: (pred_length,)
+
+                # scaler로 inverse_transform 하기 위해 2D 배열로 맞춤
+                if scaler.scale_.shape[0] == 1:
+                    # 단일 피처만 정규화한 경우
+                    prediction_rescaled = scaler.inverse_transform(prediction.reshape(-1, 1)).flatten()
+                    actual_rescaled = scaler.inverse_transform(actual.reshape(-1, 1)).flatten()
+                else:
+                    # 다변량 정규화된 경우, 첫 번째 피처(가격)만 복원
+                    n_features = scaler.scale_.shape[0]
+
+                    # prediction을 가격값만 포함한 전체 피처 벡터로 패딩
+                    pred_padded = np.zeros((pred_length, n_features))
+                    pred_padded[:, 0] = prediction  # 가격이 첫 번째 피처
+
+                    actual_padded = np.zeros((pred_length, n_features))
+                    actual_padded[:, 0] = actual
+
+                    # 역정규화
+                    prediction_rescaled = scaler.inverse_transform(pred_padded)[:, 0]
+                    actual_rescaled = scaler.inverse_transform(actual_padded)[:, 0]
             except Exception as e:
                 print(f"⚠️ 역정규화 중 오류 발생: {e}. 원본 값 사용.")
-                prediction_rescaled = prediction[0]
+                prediction_rescaled = prediction
                 actual_rescaled = actual
+
             
             # 예측 저장
             all_predictions.append({
@@ -504,3 +524,51 @@ def run_sliding_window_prediction(model, test_data, scaler, seq_length, pred_len
     
     print(f"✅ 슬라이딩 윈도우 예측 완료: {len(sliding_predictions)}개 예측")
     return sliding_predictions
+
+
+def online_update_prediction(model, test_data, scaler, seq_length, pred_length, device='cpu', lr=1e-4, loss_fn='mse'):
+    model.to(device)
+    model.train()
+
+    # 손실 함수
+    if loss_fn == 'huber':
+        criterion = HuberLoss()
+    else:
+        criterion = nn.MSELoss()
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    predictions = []
+    actuals = []
+
+    for i in range(0, len(test_data) - seq_length - pred_length + 1):
+        # 시퀀스 준비
+        input_seq = test_data[i:i+seq_length]
+        target_seq = test_data[i+seq_length:i+seq_length+pred_length, 0]  # 실제 가격
+
+        # 텐서 변환
+        input_tensor = torch.FloatTensor(input_seq).unsqueeze(0).to(device)
+        target_tensor = torch.FloatTensor(target_seq).unsqueeze(0).to(device)
+
+        # 예측
+        model.eval()
+        with torch.no_grad():
+            pred_tensor, _ = model(input_tensor)
+        model.train()
+
+        # 예측 저장
+        pred_np = pred_tensor.cpu().numpy().flatten()
+        target_np = target_tensor.cpu().numpy().flatten()
+        predictions.append(pred_np)
+        actuals.append(target_np)
+
+        # 온라인 학습 (한 step)
+        optimizer.zero_grad()
+        output, _ = model(input_tensor)
+        loss = criterion(output, target_tensor)
+        loss.backward()
+        optimizer.step()
+
+    predictions = np.array(predictions)
+    actuals = np.array(actuals)
+    return predictions, actuals
