@@ -90,5 +90,3 @@ Attention LSTM 모델은 다음과 같이 모듈화되어 있다:
 -   **`EntmaxAttention`**: 희소 어텐션을 제공하는 Entmax15 기반 어텐션 메커니즘
 -   **`train_model`**: 모델 학습 로직
 -   **`predict_future_prices`**: 학습된 모델을 사용하여 미래 가격 예측
-
-> 모델 이론 및 관련 여러 이론 참고는 [문서](./MODEL_DESCRIPTION.md)를 참고.

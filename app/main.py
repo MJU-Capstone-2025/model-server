@@ -1,12 +1,42 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import pandas as pd
 import numpy as np
 import os
 from datetime import datetime
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    앱 시작 시 실행되는 lifespan 이벤트 핸들러
+    여기서 LSTM 모델을 실행.
+    """
+    print("\n===== API 서버 시작 =====")
+    print("⏳ LSTM 모델 로드 중...")
+    try:
+        import sys
+        import os
+        # app의 상위 디렉토리를 sys.path에 추가
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = os.path.abspath(os.path.join(current_dir, ".."))
+        if root_dir not in sys.path:
+            sys.path.append(root_dir)
+
+        # LSTM 모델 import 및 실행
+        from models.time_series.lstm import run_model
+        weather_data = run_model.main()
+        print("✅ LSTM 모델 로드 완료")
+    except Exception as e:
+        print(f"❌ LSTM 모델 로드 중 오류 발생: {str(e)}")
+    yield
+    print("\n===== API 서버 종료 =====")
+
+
+# lifespan 이벤트 핸들러를 사용하여 FastAPI 앱 생성
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,7 +62,7 @@ async def get_predictions():
                 }
             )
         
-        # 데이터 로드 및 전처리
+        # API 응답을 위한 데이터 로드 및 전처리
         df = pd.read_csv(CSV_PATH)
         df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
         
