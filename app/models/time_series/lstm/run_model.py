@@ -67,7 +67,6 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
     try:
         start_time = time.time()
         print(f"🚀 커피 생두 가격 예측 모델링 시작")
-        print(f"📊 설정 - 손실 함수: {loss_fn}, Delta: {delta}, 에폭: {epochs}, 학습률: {lr}")
         
         # 1. 데이터 로드
         weather_data = load_weather_data()
@@ -87,7 +86,8 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
         debug_data_shape(train_data, test_data)  # 로더는 아직 없으므로 인자 제거
         
         # 6. 데이터 준비
-        train_loader, test_loader, scaler, test_dates, seq_length, pred_length = prepare_data_for_model(train_data, test_data)
+        train_loader, test_loader, scaler, test_dates, seq_length, pred_length \
+            = prepare_data_for_model(train_data, test_data)
         
         # 이제 로더가 준비되었으므로 더 자세한 디버깅 정보 출력
         debug_data_shape(train_data, test_data, train_loader, test_loader)
@@ -131,7 +131,7 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
 
         else:
             predictions, actuals, attention_weights, mae, rmse = predict_and_evaluate(
-                model, test_loader, scaler, device
+                model, test_loader, scaler, device, test_dates
             )
         
         # 10. 결과 저장 - 폴더 생성 및 결과 저장
@@ -162,25 +162,30 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
             folder_name=folder_name
         )
         
-        # 13. 슬라이딩 윈도우 예측 (선택적)
-        # 시간이 오래 걸릴 수 있으므로 필요한 경우에만 실행
+        # 13. 슬라이딩 윈도우 예측
         run_sliding = True
         if run_sliding:
             try:
                 test_data_array = test_data.values if hasattr(test_data, 'values') else test_data
+                # stride 값을 더 크게 설정하여 더 다양한 윈도우 생성
                 sliding_predictions = run_sliding_window_prediction(
                     model, 
                     scaler.transform(test_data_array), 
                     scaler, 
                     seq_length, 
                     pred_length, 
-                    device
+                    device=device,
+                    stride=1,
+                    folder_name=folder_name,
+                    test_dates=test_dates
                 )
-                
-                # 슬라이딩 윈도우 예측 결과 시각화
-                plot_sliding_window_predictions(
-                    sliding_predictions, 
-                    max_samples=5, 
+
+                # 슬라이딩 윈도우 예측 결과 시각화 (기존 메모리 기반 시각화 삭제)
+                from .utils import plot_sliding_window_from_csv
+                csv_path = os.path.join(result_dir, 'sliding_window_predictions.csv')
+                plot_sliding_window_from_csv(
+                    csv_path,
+                    max_windows=5,
                     save_path=os.path.join(result_dir, 'sliding_window_predictions.png')
                 )
             except Exception as e:

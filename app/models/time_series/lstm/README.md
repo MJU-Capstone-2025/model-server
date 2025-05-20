@@ -53,7 +53,7 @@ cd app
 
 # PowerShell에서 환경 변수 설정
 $env:COFFEE_MODEL_LOSS_FN = "huber"
-$env:COFFEE_MODEL_DELTA = "0.5"
+$env:COFFEE_MODEL_DELTA = "1.0"
 $env:COFFEE_MODEL_EPOCHS = "5"
 $env:COFFEE_MODEL_LR = "0.001"
 $env:COFFEE_MODEL_ONLINE = "False"

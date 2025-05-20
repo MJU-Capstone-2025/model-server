@@ -53,6 +53,7 @@ def leave_PRECTOTCORR_columns(df):
     """
     # 'PRECTOTCORR', 'season_tag', 'until' 관련 컬럼들
     prectotcorr_cols = [col for col in df.columns if 'PRECTOTCORR' in col]
+    t2m_cols = [col for col in df.columns if 'T2M' in col]
     season_tag_cols = [col for col in df.columns if 'season_tag' in col]
     until_cols = [col for col in df.columns if 'until' in col]
     
@@ -60,7 +61,8 @@ def leave_PRECTOTCORR_columns(df):
     keep_cols = ['Date', 'Coffee_Price', 'Coffee_Price_Return'] \
         + prectotcorr_cols \
         + until_cols \
-        + season_tag_cols
+        + season_tag_cols \
+        # + t2m_cols
     
     # 남길 컬럼들로 필터링
     df = df[keep_cols]

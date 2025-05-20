@@ -8,6 +8,7 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import MinMaxScaler
 import os
 import warnings
+import datetime
 warnings.filterwarnings('ignore')
 
 # Entmax15 구현 (Softmax 대체)
@@ -363,13 +364,14 @@ def train_model(model, train_loader, val_loader, epochs, lr=0.001, device='cpu',
     return train_losses, val_losses
 
 # 예측 및 평가 함수
-def predict_and_evaluate(model, test_loader, scaler, device='cpu'):
+def predict_and_evaluate(model, test_loader, scaler, device='cpu', test_dates=None):
     """테스트 데이터로 예측 및 평가"""
     model.eval()
     predictions = []
     actuals = []
     attention_weights = []
     
+
     with torch.no_grad():
         for X_batch, y_batch in test_loader:
             try:
@@ -410,8 +412,22 @@ def predict_and_evaluate(model, test_loader, scaler, device='cpu'):
         print(f"⚠️ 역정규화 중 오류 발생: {e}. 원본 값 사용.")
         predictions_rescaled = predictions[:, 0]  # 첫 번째 값만 사용
         actuals_rescaled = actuals[:, 0]
+
+    # 휴장일 처리 (test_dates가 있는 경우)
+    if test_dates is not None:
+        # 예측 결과를 pd.Series로 변환하여 날짜 인덱스 부여
+        from .market_calendar import adjust_forecast_for_market_calendar
+        
+        # 예측값을 Series로 변환
+        predictions_series = pd.Series(predictions_rescaled, index=test_dates)
+
+        # 휴장일 조정 수행
+        adjusted_predictions = adjust_forecast_for_market_calendar(predictions_series)
+        
+        # 다시 numpy 배열로 변환
+        predictions_rescaled = adjusted_predictions.values
     
-    # 평가 지표 계산
+    # 나머지 평가 부분은 그대로 유지
     mae = np.mean(np.abs(predictions_rescaled - actuals_rescaled))
     rmse = np.sqrt(np.mean((predictions_rescaled - actuals_rescaled)**2))
     
@@ -419,73 +435,134 @@ def predict_and_evaluate(model, test_loader, scaler, device='cpu'):
     
     return predictions_rescaled, actuals_rescaled, attention_weights, mae, rmse
 
-# 슬라이딩 윈도우 예측 데이터 생성 함수
-def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stride=1, device='cpu'):
+def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stride=1, device='cpu', test_dates=None, folder_name=None):
     """슬라이딩 윈도우 방식으로 예측"""
     model.eval()
-    
-    # 첫 번째 시퀀스 준비
+    print(f"[DEBUG] test_dates: {test_dates}")
+    if test_dates is not None:
+        test_dates = [d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d) for d in test_dates]
     all_predictions = []
-    
     for i in range(0, len(data) - seq_length - pred_length + 1, stride):
         try:
-            # 시퀀스 데이터 추출
-            sequence = data[i:i+seq_length]
-            actual = data[i+seq_length:i+seq_length+pred_length, 0]  # 첫 번째 컬럼(가격)
-            
-            # 텐서로 변환
-            sequence_tensor = torch.FloatTensor(sequence).unsqueeze(0).to(device)  # [1, seq_length, n_features]
-            
-            # 예측
+            sequence = data[i:i+seq_length].copy()
+            actual = data[i+seq_length:i+seq_length+pred_length, 0].copy()
+            sequence_tensor = torch.FloatTensor(sequence).unsqueeze(0).to(device)
             with torch.no_grad():
                 prediction, _ = model(sequence_tensor)
                 prediction = prediction.cpu().numpy()
-
-            # 역정규화
             try:
-                # 예측 결과 shape: (1, pred_length)
-                prediction = prediction[0]  # shape: (pred_length,)
-
-                # 실제 값도 동일하게
-                actual = actual.reshape(-1)  # shape: (pred_length,)
-
-                # scaler로 inverse_transform 하기 위해 2D 배열로 맞춤
+                prediction = prediction[0]
+                actual = actual.reshape(-1)
                 if scaler.scale_.shape[0] == 1:
-                    # 단일 피처만 정규화한 경우
                     prediction_rescaled = scaler.inverse_transform(prediction.reshape(-1, 1)).flatten()
                     actual_rescaled = scaler.inverse_transform(actual.reshape(-1, 1)).flatten()
                 else:
-                    # 다변량 정규화된 경우, 첫 번째 피처(가격)만 복원
                     n_features = scaler.scale_.shape[0]
-
-                    # prediction을 가격값만 포함한 전체 피처 벡터로 패딩
                     pred_padded = np.zeros((pred_length, n_features))
-                    pred_padded[:, 0] = prediction  # 가격이 첫 번째 피처
-
+                    for j in range(pred_length):
+                        pred_padded[j, 0] = prediction[j]
                     actual_padded = np.zeros((pred_length, n_features))
-                    actual_padded[:, 0] = actual
-
-                    # 역정규화
+                    for j in range(pred_length):
+                        actual_padded[j, 0] = actual[j]
                     prediction_rescaled = scaler.inverse_transform(pred_padded)[:, 0]
                     actual_rescaled = scaler.inverse_transform(actual_padded)[:, 0]
             except Exception as e:
                 print(f"⚠️ 역정규화 중 오류 발생: {e}. 원본 값 사용.")
                 prediction_rescaled = prediction
                 actual_rescaled = actual
-
-            
-            # 예측 저장
-            all_predictions.append({
+            # 날짜 정보 추출 (있는 경우)
+            dates = None
+            if test_dates is not None:
+                start_date_idx = i + seq_length
+                end_date_idx = start_date_idx + pred_length
+                if start_date_idx < len(test_dates):
+                    # 남은 날짜만큼만 할당, 부족하면 마지막 날짜 이후로 채움
+                    dates_slice = test_dates[start_date_idx:min(end_date_idx, len(test_dates))]
+                    pad_len = pred_length - len(dates_slice)
+                    if pad_len > 0:
+                        last_date = test_dates[-1]
+                        if isinstance(last_date, str):
+                            last_date_dt = datetime.datetime.strptime(last_date, '%Y-%m-%d')
+                        else:
+                            last_date_dt = last_date
+                        extra_dates = [(last_date_dt + datetime.timedelta(days=k+1)).strftime('%Y-%m-%d') for k in range(pad_len)]
+                        dates = list(dates_slice) + extra_dates
+                    else:
+                        dates = list(dates_slice)
+                else:
+                    # 완전히 범위 밖이면 마지막 날짜 이후로만 채움
+                    last_date = test_dates[-1]
+                    if isinstance(last_date, str):
+                        last_date_dt = datetime.datetime.strptime(last_date, '%Y-%m-%d')
+                    else:
+                        last_date_dt = last_date
+                    dates = [(last_date_dt + datetime.timedelta(days=k+1)).strftime('%Y-%m-%d') for k in range(pred_length)]
+            prediction_info = {
                 'start_idx': i,
                 'end_idx': i + seq_length + pred_length,
                 'prediction': prediction_rescaled,
-                'actual': actual_rescaled
-            })
+                'actual': actual_rescaled,
+                'seq_length': seq_length,
+                'pred_length': pred_length
+            }
+            if dates is not None:
+                prediction_info['dates'] = dates
+            all_predictions.append(prediction_info)
         except Exception as e:
-            print(f"[에러] 윈도우 {i} 예측 중 오류 발생: {e}")
+            print(f"❌ 윈도우 {i} 예측 중 오류 발생: {e}")
             continue
-    
+    if folder_name:
+        save_predictions_to_csv(all_predictions, test_dates, folder_name=folder_name)
     return all_predictions
+
+def save_predictions_to_csv(all_predictions, test_dates=None, folder_name=None):
+    import pandas as pd
+    import os
+    import numpy as np
+    from datetime import datetime
+    from .utils import get_result_dir
+    try:
+        result_dir = get_result_dir(folder_name)
+        csv_path = os.path.join(result_dir, 'sliding_window_predictions.csv')
+        # test_dates를 string으로 변환
+        if test_dates is not None:
+            test_dates = [d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d) for d in test_dates]
+        all_data = []
+        for idx, pred_data in enumerate(all_predictions):
+            window_id = idx + 1
+            start_idx = pred_data['start_idx']
+            end_idx = pred_data['end_idx']
+            seq_length = pred_data.get('seq_length', 50)
+            dates = pred_data.get('dates', None)
+            for step in range(len(pred_data['prediction'])):
+                data_row = {
+                    'window_id': window_id,
+                    'start_idx': start_idx,
+                    'end_idx': end_idx,
+                    'step': step + 1,
+                    'prediction': pred_data['prediction'][step],
+                    'actual': pred_data['actual'][step],
+                }
+                # 날짜 정보가 있는 경우 string으로 저장
+                if dates is not None and step < len(dates):
+                    data_row['date'] = dates[step]
+                elif test_dates is not None and start_idx + seq_length + step < len(test_dates):
+                    data_row['date'] = test_dates[start_idx + seq_length + step]
+                else:
+                    data_row['date'] = ''
+                all_data.append(data_row)
+        df = pd.DataFrame(all_data)
+        if 'date' in df.columns:
+            cols = ['window_id', 'date', 'step', 'prediction', 'actual', 'start_idx', 'end_idx']
+            df = df[[col for col in cols if col in df.columns]]
+        df.to_csv(csv_path, index=False)
+        print(f"✅ 슬라이딩 윈도우 예측 결과 CSV 저장 완료: {csv_path}")
+        # ... 이하 기존 코드 유지 ...
+    except Exception as e:
+        print(f"❌ CSV 파일 저장 중 오류 발생: {e}")
+        import traceback
+        print(traceback.format_exc())
+        return None
 
 def setup_model(input_dim, use_entmax=False):
     """모델 설정"""
@@ -511,17 +588,23 @@ def setup_model(input_dim, use_entmax=False):
     
     return model, device
 
-def run_sliding_window_prediction(model, test_data, scaler, seq_length, pred_length, device):
+def run_sliding_window_prediction(model, test_data, scaler, seq_length, pred_length, device, stride=1, folder_name=None, test_dates=None):
     """슬라이딩 윈도우 방식으로 예측 진행"""
     print(f"⏳ 슬라이딩 윈도우 예측 진행 중...")
-    
-    # 슬라이딩 윈도우 예측
-    sliding_predictions = sliding_window_prediction(model, test_data, scaler, seq_length, pred_length, stride=1, device=device)
-    
+    sliding_predictions = sliding_window_prediction(
+        model, 
+        test_data, 
+        scaler, 
+        seq_length, 
+        pred_length, 
+        stride=stride, 
+        device=device, 
+        test_dates=test_dates, 
+        folder_name=folder_name
+    )
     if not sliding_predictions:
         print("⚠️ 슬라이딩 윈도우 예측 결과가 없습니다.")
         return []
-    
     print(f"✅ 슬라이딩 윈도우 예측 완료: {len(sliding_predictions)}개 예측")
     return sliding_predictions
 
