@@ -65,7 +65,7 @@ LSTM과 Attention 메커니즘을 결합한 모델을 선택한 근거는 다음
 
 ## 4. 결과: 기후·경제 데이터 기반 모델
 
-![loss](../app/data/output/results/coffee_price_model_huber_epochs50_20250523_000052/training_loss.png)
+![loss](./img/training_loss.png)
 
 > 모델 학습 시에 epoch을 50으로 두었지만, 5 이후부터 크게 진동하여, epoch은 5로 고정하였다 모델은 온라인 학습을 진행하지 않고, **기본 LSTM + Attention 모델**을 활용하였으며, 손실함수로는 **Huber Loss( delta = 1.0 )** 를 선택하였다. 추가로 슬라이딩 윈도우 방식을 적용했을 때 **Stride는 7일**로 설정하였다.
 
