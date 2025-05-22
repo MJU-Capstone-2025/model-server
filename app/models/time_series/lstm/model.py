@@ -9,7 +9,8 @@ from sklearn.preprocessing import MinMaxScaler
 import os
 import warnings
 import datetime
-from .utils import get_result_dir
+from .utils import get_result_dir, save_predictions_to_csv
+from .market_calendar import adjust_forecast_for_market_calendar, is_trading_day
 
 warnings.filterwarnings('ignore')
 
@@ -365,225 +366,276 @@ def train_model(model, train_loader, val_loader, epochs, lr=0.001, device='cpu',
     print(f"✅ 모델 훈련 완료: {epochs}에폭")
     return train_losses, val_losses
 
-# 예측 및 평가 함수
-def predict_and_evaluate(model, test_loader, scaler, device='cpu', test_dates=None):
-    """테스트 데이터로 예측 및 평가"""
+def returns_to_price(returns, start_price):
+    """수익률 시퀀스를 누적 곱하여 price 시퀀스로 변환하는 함수"""
+    # returns: (N,) 또는 (batch, N)
+    # start_price: float 또는 (batch,)
+    if returns.ndim == 1:
+        return start_price * np.cumprod(1 + returns)
+    elif returns.ndim == 2:
+        return np.array([sp * np.cumprod(1 + r) for r, sp in zip(returns, start_price)])
+    else:
+        raise ValueError('returns shape error')
+
+def predict_and_evaluate(model, test_loader, scaler, device='cpu', test_dates=None, folder_name=None, target='price'):
+    """테스트 데이터로 예측 및 평가 + 휴장일 보정 및 csv 저장 (target: price/return)"""
+    import numpy as np
+    import pandas as pd
+    from datetime import datetime, timedelta
+    from .market_calendar import adjust_forecast_for_market_calendar, is_trading_day
+
     model.eval()
     predictions = []
     actuals = []
     attention_weights = []
-    
+    all_dates = []
 
     with torch.no_grad():
         for X_batch, y_batch in test_loader:
             try:
                 X_batch = X_batch.to(device)
-                
-                # 예측
                 y_pred, att_weights = model(X_batch)
-                
-                # 결과 저장
                 predictions.append(y_pred.cpu().numpy())
                 actuals.append(y_batch.numpy())
                 attention_weights.append(att_weights.cpu().numpy())
             except Exception as e:
                 print(f"❌ 예측 배치 처리 중 오류 발생: {e}")
                 continue
-    
+
     if not predictions:
         raise ValueError("❌ 예측 결과가 없습니다. 모든 배치에서 오류가 발생했습니다.")
-    
-    # 결합
+
     predictions = np.vstack(predictions)
     actuals = np.vstack(actuals)
     attention_weights = np.vstack(attention_weights)
-    
-    # 역정규화 (첫 번째 컬럼인 가격만)
+
+    # 역정규화 (첫 번째 컬럼인 가격/수익률만)
     try:
-        # 패딩 크기 계산
         pad_width = scaler.scale_.shape[0] - predictions.shape[1]
-        
-        # 예측 결과와 실제 값을 패딩하여 역정규화
         padded_predictions = np.pad(predictions, ((0, 0), (0, pad_width)), 'constant')
         padded_actuals = np.pad(actuals, ((0, 0), (0, pad_width)), 'constant')
-        
-        # 역정규화
-        predictions_rescaled = scaler.inverse_transform(padded_predictions)[..., 0]
-        actuals_rescaled = scaler.inverse_transform(padded_actuals)[..., 0]
+        if target == 'price':
+            predictions_rescaled = scaler.inverse_transform(padded_predictions)[..., 0]
+            actuals_rescaled = scaler.inverse_transform(padded_actuals)[..., 0]
+        elif target == 'return':
+            # 수익률 컬럼이 1번이라고 가정 (Coffee_Price_Return)
+            predictions_rescaled = scaler.inverse_transform(padded_predictions)[..., 1]
+            actuals_rescaled = scaler.inverse_transform(padded_actuals)[..., 1]
+        else:
+            raise ValueError(f'Unknown target: {target}')
     except Exception as e:
         print(f"⚠️ 역정규화 중 오류 발생: {e}. 원본 값 사용.")
-        predictions_rescaled = predictions[:, 0]  # 첫 번째 값만 사용
+        predictions_rescaled = predictions[:, 0]
         actuals_rescaled = actuals[:, 0]
 
-    # 휴장일 처리 (test_dates가 있는 경우)
+    # === price/return 변환 ===
+    if target == 'return':
+        # test_dates가 있으면 첫날 가격을 test_dates[0]로부터 추출
+        # 없으면 200으로 임시(사용자 맞춤 필요)
+        if test_dates is not None and hasattr(test_dates, '__len__') and len(test_dates) > 0:
+            # test_loader.dataset[0][0]의 마지막 price를 쓰는 게 더 정확하지만, 여기선 test_dates[0]에 해당하는 price를 사용한다고 가정
+            # 실제로는 test set의 첫날 price를 별도 전달받는 게 가장 안전함
+            # 여기서는 scaler의 min/max로 역정규화한 price를 사용(0번 컬럼)
+            # padded_predictions[0, 0]은 첫날 price의 정규화 값
+            # 역정규화
+            first_price_norm = padded_predictions[0, 0]
+            first_price = scaler.inverse_transform([padded_predictions[0]])[0, 0]
+        else:
+            first_price = 200.0  # 임시값
+        price_pred = returns_to_price(predictions_rescaled, first_price)
+        price_actual = returns_to_price(actuals_rescaled, first_price)
+    else:
+        price_pred = predictions_rescaled
+        price_actual = actuals_rescaled
+
+    # 첫날 보정 (price 기준)
+    if len(price_pred) > 0 and len(price_actual) > 0:
+        shift = price_actual[0] - price_pred[0]
+        price_pred = price_pred + shift
+
+    # 예측 구간 날짜 생성 (test_dates가 있으면 그걸 사용, 없으면 연속 날짜 생성)
     if test_dates is not None:
-        # 예측 결과를 pd.Series로 변환하여 날짜 인덱스 부여
-        from .market_calendar import adjust_forecast_for_market_calendar
-        
-        # 예측값을 Series로 변환
-        predictions_series = pd.Series(predictions_rescaled, index=test_dates)
+        start_date = pd.to_datetime(test_dates[0])
+        end_date = pd.to_datetime(test_dates[0]) + timedelta(days=len(price_pred)-1)
+        all_dates = pd.date_range(start=start_date, end=end_date, freq='D')
+        if not isinstance(test_dates, list):
+            test_dates_str = [d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d) for d in test_dates]
+        else:
+            test_dates_str = test_dates
+    else:
+        all_dates = pd.RangeIndex(len(price_pred))
+        test_dates_str = None
 
-        # 휴장일 조정 수행
-        adjusted_predictions = adjust_forecast_for_market_calendar(predictions_series)
-        
-        # 다시 numpy 배열로 변환
-        predictions_rescaled = adjusted_predictions.values
-    
-    # 나머지 평가 부분은 그대로 유지
-    mae = np.mean(np.abs(predictions_rescaled - actuals_rescaled))
-    rmse = np.sqrt(np.mean((predictions_rescaled - actuals_rescaled)**2))
-    
+    # 휴장일 보정: 휴장일에는 가장 최근 거래일의 예측값을 복사
+    pred_series = pd.Series(price_pred, index=all_dates)
+    adj_pred_series = pred_series.copy()
+    for i in range(1, len(all_dates)):
+        d = all_dates[i]
+        if not is_trading_day(d):
+            prev_idx = i-1
+            while prev_idx >= 0 and not is_trading_day(all_dates[prev_idx]):
+                prev_idx -= 1
+            if prev_idx >= 0:
+                adj_pred_series[d] = adj_pred_series[all_dates[prev_idx]]
+    # 실제값도 같은 방식으로 맞추되, 없는 날짜는 nan
+    adj_actuals = []
+    for d in all_dates:
+        d_str = d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d)
+        if test_dates_str is not None and d_str in test_dates_str:
+            idx = test_dates_str.index(d_str)
+            adj_actuals.append(price_actual[idx])
+        else:
+            adj_actuals.append(np.nan)
+
+    # csv 저장 (price/return 모두 저장)
+    all_data = []
+    for i, d in enumerate(all_dates):
+        data_row = {
+            'window_id': 1,
+            'date': d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d),
+            'step': i+1,
+            'prediction_price': adj_pred_series.iloc[i],
+            'actual_price': adj_actuals[i],
+            'prediction_return': predictions_rescaled[i] if target == 'return' else np.nan,
+            'actual_return': actuals_rescaled[i] if target == 'return' else np.nan,
+            'start_idx': 0,
+            'end_idx': len(all_dates)
+        }
+        all_data.append(data_row)
+    df = pd.DataFrame(all_data)
+    cols = ['window_id', 'date', 'step', 'prediction_price', 'actual_price', 'prediction_return', 'actual_return', 'start_idx', 'end_idx']
+    df = df[[col for col in cols if col in df.columns]]
+    if folder_name is None:
+        folder_name = 'basic_predict'
+    result_dir = get_result_dir(folder_name)
+    csv_path = os.path.join(result_dir, 'basic_prediction.csv')
+    os.makedirs(result_dir, exist_ok=True)
+    df.to_csv(csv_path, index=False)
+    print(f"✅ 기본 예측 결과 CSV 저장 완료: {csv_path}")
+
+    mae = np.nanmean(np.abs(adj_pred_series.values - np.array(adj_actuals)))
+    rmse = np.sqrt(np.nanmean((adj_pred_series.values - np.array(adj_actuals))**2))
     print(f'평가 지표 - MAE: {mae:.4f}, RMSE: {rmse:.4f}')
-    
-    return predictions_rescaled, actuals_rescaled, attention_weights, mae, rmse
 
-def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stride=7, device='cpu', test_dates=None, folder_name=None):
-    """슬라이딩 윈도우 방식으로 예측"""
+    return adj_pred_series.values, np.array(adj_actuals), attention_weights, mae, rmse
+
+def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stride=14, device='cpu', test_dates=None, folder_name=None, isOnline=False, target='price'):
+    """슬라이딩 윈도우 방식으로 예측 (온라인 또는 일반, target: price/return)"""
     model.eval()
     print(f"[DEBUG] test_dates: {test_dates}")
     if test_dates is not None:
         test_dates = [d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d) for d in test_dates]
     all_predictions = []
 
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)  # 온라인 학습을 위한 옵티마이저 설정
+
     # 슬라이딩 윈도우 방식으로 예측
     for i in range(0, len(data) - seq_length - pred_length + 1, stride):
         try:
             sequence = data[i:i+seq_length].copy()
-            actual = data[i+seq_length:i+seq_length+pred_length, 0].copy()
+            # 실제값 추출 (target 분기)
+            if target == 'price':
+                actual = data[i+seq_length:i+seq_length+pred_length, 0].copy().reshape(-1)
+            elif target == 'return':
+                actual = data[i+seq_length:i+seq_length+pred_length, 1].copy().reshape(-1)
+            else:
+                raise ValueError(f'Unknown target: {target}')
             sequence_tensor = torch.FloatTensor(sequence).unsqueeze(0).to(device)
+
+            # 예측
             with torch.no_grad():
                 prediction, _ = model(sequence_tensor)
-                prediction = prediction.cpu().numpy()
-            try:
-                prediction = prediction[0]
-                actual = actual.reshape(-1)
-                if scaler.scale_.shape[0] == 1:
-                    prediction_rescaled = scaler.inverse_transform(prediction.reshape(-1, 1)).flatten()
-                    actual_rescaled = scaler.inverse_transform(actual.reshape(-1, 1)).flatten()
-                else:
-                    n_features = scaler.scale_.shape[0]
-                    pred_padded = np.zeros((pred_length, n_features))
-                    for j in range(pred_length):
-                        pred_padded[j, 0] = prediction[j]
-                    actual_padded = np.zeros((pred_length, n_features))
-                    for j in range(pred_length):
-                        actual_padded[j, 0] = actual[j]
-                    prediction_rescaled = scaler.inverse_transform(pred_padded)[:, 0]
-                    actual_rescaled = scaler.inverse_transform(actual_padded)[:, 0]
-            except Exception as e:
-                print(f"⚠️ 역정규화 중 오류 발생: {e}. 원본 값 사용.")
-                prediction_rescaled = prediction
-                actual_rescaled = actual
-            # 날짜 정보 추출 (있는 경우)
-            dates = None
-            if test_dates is not None:
-                start_date_idx = i + seq_length
-                end_date_idx = start_date_idx + pred_length
-                if start_date_idx < len(test_dates):
-                    # 남은 날짜만큼만 할당, 부족하면 마지막 날짜 이후로 채움
-                    dates_slice = test_dates[start_date_idx:min(end_date_idx, len(test_dates))]
-                    pad_len = pred_length - len(dates_slice)
-                    if pad_len > 0:
-                        last_date = test_dates[-1]
-                        if isinstance(last_date, str):
-                            last_date_dt = datetime.datetime.strptime(last_date, '%Y-%m-%d')
-                        else:
-                            last_date_dt = last_date
-                        extra_dates = [(last_date_dt + datetime.timedelta(days=k+1)).strftime('%Y-%m-%d') for k in range(pad_len)]
-                        dates = list(dates_slice) + extra_dates
-                    else:
-                        dates = list(dates_slice)
-                else:
-                    # 완전히 범위 밖이면 마지막 날짜 이후로만 채움
-                    last_date = test_dates[-1]
-                    if isinstance(last_date, str):
-                        last_date_dt = datetime.datetime.strptime(last_date, '%Y-%m-%d')
-                    else:
-                        last_date_dt = last_date
-                    dates = [(last_date_dt + datetime.timedelta(days=k+1)).strftime('%Y-%m-%d') for k in range(pred_length)]
+                prediction = prediction.cpu().numpy().reshape(-1)  # (pred_length,)
 
-            # 예측 결과 저장
+            # 역정규화 (feature 수에 맞게 더미 feature 붙이기)
+            n_features = scaler.scale_.shape[0]
+            pred_padded = np.zeros((pred_length, n_features))
+            actual_padded = np.zeros((pred_length, n_features))
+            if target == 'price':
+                pred_padded[:, 0] = prediction
+                actual_padded[:, 0] = actual
+                prediction_rescaled = scaler.inverse_transform(pred_padded)[:, 0]
+                actual_rescaled = scaler.inverse_transform(actual_padded)[:, 0]
+                prediction_return = np.nan * np.ones_like(prediction_rescaled)
+                actual_return = np.nan * np.ones_like(actual_rescaled)
+                prediction_price = prediction_rescaled
+                actual_price = actual_rescaled
+            elif target == 'return':
+                pred_padded[:, 1] = prediction
+                actual_padded[:, 1] = actual
+                prediction_rescaled = scaler.inverse_transform(pred_padded)[:, 1]
+                actual_rescaled = scaler.inverse_transform(actual_padded)[:, 1]
+                # 누적 곱으로 price 환산 (윈도우 시작점 price 필요)
+                # 윈도우 시작점 price는 data[i+seq_length-1, 0] (정규화된 값) -> 역정규화
+                start_price_norm = data[i+seq_length-1, 0]
+                start_price = scaler.inverse_transform([[start_price_norm]+[0]*(n_features-1)])[0, 0]
+                prediction_price = returns_to_price(prediction_rescaled, start_price)
+                actual_price = returns_to_price(actual_rescaled, start_price)
+                prediction_return = prediction_rescaled
+                actual_return = actual_rescaled
+            else:
+                raise ValueError(f'Unknown target: {target}')
+
+            # 변동성 완화 보정: 온라인 모드일 때만 적용
+            if isOnline and i > 0:
+                previous_prediction = all_predictions[-1]['prediction_price'] if all_predictions else prediction_price
+                change = (prediction_price[0] - previous_prediction[0]) / 1 # 변화율 보정 안함
+                prediction_price = previous_prediction + change
+
+            # 예측 결과 보정: 첫날 실제값과 예측값의 차이만큼 전체 예측값을 shift (price 기준)
+            shift = actual_price[0] - prediction_price[0]
+            prediction_price = prediction_price + shift
+
+            # === 휴장일 보정 ===
+            # 날짜 인덱스 생성 (test_dates가 있으면 그에 맞춰서, 없으면 None)
+            if test_dates is not None:
+                # 각 윈도우의 예측 구간에 해당하는 날짜 리스트 생성
+                start_idx = i + seq_length
+                end_idx = i + seq_length + pred_length
+                window_dates = test_dates[start_idx:end_idx]
+                if len(window_dates) == len(prediction_price):
+                    pred_series = pd.Series(prediction_price, index=pd.to_datetime(window_dates))
+                    prediction_price = adjust_forecast_for_market_calendar(pred_series).values
+            # ===
+
+            # 예측 결과 저장 (price/return 모두)
             prediction_info = {
                 'start_idx': i,
                 'end_idx': i + seq_length + pred_length,
-                'prediction': prediction_rescaled,
-                'actual': actual_rescaled,
+                'prediction_price': prediction_price,
+                'actual_price': actual_price,
+                'prediction_return': prediction_return,
+                'actual_return': actual_return,
                 'seq_length': seq_length,
                 'pred_length': pred_length
             }
-
-            if dates is not None:
-                prediction_info['dates'] = dates
             all_predictions.append(prediction_info)
+
+            # 온라인 학습 (한 step): 온라인 모드일 때만 적용
+            if isOnline:
+                model.train()
+                input_tensor = torch.FloatTensor(sequence).unsqueeze(0).to(device)
+                target_tensor = torch.FloatTensor(actual).unsqueeze(0).to(device)  # (1, pred_length)
+                optimizer.zero_grad()
+                output, _ = model(input_tensor)
+                output = output.squeeze(0)  # (pred_length,)
+                loss = nn.MSELoss()(output, target_tensor.squeeze(0))
+                loss.backward()
+                optimizer.step()
+
         except Exception as e:
             print(f"❌ 윈도우 {i} 예측 중 오류 발생: {e}")
             continue
-
-    # 각 윈도우마다 첫날 실제-예측값을 각 윈도우의 2주간 예측값에 첫날 값을 더해서 보정
-    for i, pred_data in enumerate(all_predictions):
-        if i == 0:
-            pred_data['prediction'] = pred_data['prediction'] + (pred_data['actual'][0] - pred_data['prediction'][0])
-        else:
-            pred_data['prediction'] = pred_data['prediction'] + (pred_data['actual'][0] - all_predictions[i-1]['prediction'][-1])
-        pred_data['actual'] = pred_data['actual'] + (pred_data['actual'][0] - all_predictions[i-1]['prediction'][-1])
-
-        
-
-    if folder_name:
-        save_predictions_to_csv(all_predictions, test_dates, folder_name=folder_name)
+    # price/return 모두 저장
+    save_predictions_to_csv(all_predictions, test_dates, folder_name, target=target)
     return all_predictions
-
-def save_predictions_to_csv(all_predictions, test_dates=None, folder_name=None):
-
-    try:
-        result_dir = get_result_dir(folder_name)
-        csv_path = os.path.join(result_dir, 'sliding_window_predictions.csv')
-        # test_dates를 string으로 변환
-        if test_dates is not None:
-            test_dates = [d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d) for d in test_dates]
-        all_data = []
-        for idx, pred_data in enumerate(all_predictions):
-            window_id = idx + 1
-            start_idx = pred_data['start_idx']
-            end_idx = pred_data['end_idx']
-            seq_length = pred_data.get('seq_length', 50)
-            dates = pred_data.get('dates', None)
-            for step in range(len(pred_data['prediction'])):
-                data_row = {
-                    'window_id': window_id,
-                    'start_idx': start_idx,
-                    'end_idx': end_idx,
-                    'step': step + 1,
-                    'prediction': pred_data['prediction'][step],
-                    'actual': pred_data['actual'][step],
-                }
-                # 날짜 정보가 있는 경우 string으로 저장
-                if dates is not None and step < len(dates):
-                    data_row['date'] = dates[step]
-                elif test_dates is not None and start_idx + seq_length + step < len(test_dates):
-                    data_row['date'] = test_dates[start_idx + seq_length + step]
-                else:
-                    data_row['date'] = ''
-                all_data.append(data_row)
-        df = pd.DataFrame(all_data)
-        if 'date' in df.columns:
-            cols = ['window_id', 'date', 'step', 'prediction', 'actual', 'start_idx', 'end_idx']
-            df = df[[col for col in cols if col in df.columns]]
-        df.to_csv(csv_path, index=False)
-        print(f"✅ 슬라이딩 윈도우 예측 결과 CSV 저장 완료: {csv_path}")
-        # ... 이하 기존 코드 유지 ...
-    except Exception as e:
-        print(f"❌ CSV 파일 저장 중 오류 발생: {e}")
-        import traceback
-        print(traceback.format_exc())
-        return None
 
 def setup_model(input_dim, use_entmax=False):
     """모델 설정"""
     print(f"⏳ 모델 설정 중...")
     
     hidden_dim = 128
-    output_dim = 14  # 14일 예측
+    output_dim = 28  # 14일 예측
     num_layers = 2
     dropout = 0.2
     
@@ -602,8 +654,8 @@ def setup_model(input_dim, use_entmax=False):
     
     return model, device
 
-def run_sliding_window_prediction(model, test_data, scaler, seq_length, pred_length, device, stride=1, folder_name=None, test_dates=None):
-    """슬라이딩 윈도우 방식으로 예측 진행"""
+def run_sliding_window_prediction(model, test_data, scaler, seq_length, pred_length, device, stride=1, folder_name=None, test_dates=None, isOnline=False, target='price'):
+    """슬라이딩 윈도우 방식으로 예측 진행 (isOnline 파라미터 추가, target: price/return)"""
     print(f"⏳ 슬라이딩 윈도우 예측 진행 중...")
     sliding_predictions = sliding_window_prediction(
         model, 
@@ -614,7 +666,9 @@ def run_sliding_window_prediction(model, test_data, scaler, seq_length, pred_len
         stride=stride, 
         device=device, 
         test_dates=test_dates, 
-        folder_name=folder_name
+        folder_name=folder_name,
+        isOnline=isOnline,
+        target=target
     )
     if not sliding_predictions:
         print("⚠️ 슬라이딩 윈도우 예측 결과가 없습니다.")
@@ -622,50 +676,3 @@ def run_sliding_window_prediction(model, test_data, scaler, seq_length, pred_len
     print(f"✅ 슬라이딩 윈도우 예측 완료: {len(sliding_predictions)}개 예측")
     return sliding_predictions
 
-
-def online_update_prediction(model, test_data, scaler, seq_length, pred_length, device='cpu', lr=1e-4, loss_fn='mse'):
-    model.to(device)
-    model.train()
-
-    # 손실 함수
-    if loss_fn == 'huber':
-        criterion = HuberLoss()
-    else:
-        criterion = nn.MSELoss()
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-
-    predictions = []
-    actuals = []
-
-    for i in range(0, len(test_data) - seq_length - pred_length + 1):
-        # 시퀀스 준비
-        input_seq = test_data[i:i+seq_length]
-        target_seq = test_data[i+seq_length:i+seq_length+pred_length, 0]  # 실제 가격
-
-        # 텐서 변환
-        input_tensor = torch.FloatTensor(input_seq).unsqueeze(0).to(device)
-        target_tensor = torch.FloatTensor(target_seq).unsqueeze(0).to(device)
-
-        # 예측
-        model.eval()
-        with torch.no_grad():
-            pred_tensor, _ = model(input_tensor)
-        model.train()
-
-        # 예측 저장
-        pred_np = pred_tensor.cpu().numpy().flatten()
-        target_np = target_tensor.cpu().numpy().flatten()
-        predictions.append(pred_np)
-        actuals.append(target_np)
-
-        # 온라인 학습 (한 step)
-        optimizer.zero_grad()
-        output, _ = model(input_tensor)
-        loss = criterion(output, target_tensor)
-        loss.backward()
-        optimizer.step()
-
-    predictions = np.array(predictions)
-    actuals = np.array(actuals)
-    return predictions, actuals

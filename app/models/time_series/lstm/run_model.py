@@ -48,10 +48,13 @@ def parse_arguments():
     
     parser.add_argument('--online', action='store_true',
                     help='온라인 업데이트 방식으로 예측 수행')
+    
+    parser.add_argument('--target', type=str, choices=['price', 'return'],
+                        help='예측 타겟 (price 또는 return)')
 
     return parser.parse_args()
 
-def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
+def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False, target='price'):
     """
     메인 실행 함수
     
@@ -60,13 +63,15 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
         delta (float): Huber 손실 함수의 delta 값 (huber 사용 시에만 적용)
         epochs (int): 훈련 에폭 수
         lr (float): 학습률
+        online (bool): 온라인 업데이트 방식 사용 여부
+        target (str): 예측 타겟 ('price' 또는 'return')
     
     Returns:
         dict: 모델링 결과
     """
     try:
         start_time = time.time()
-        print(f"🚀 커피 생두 가격 예측 모델링 시작")
+        print(f"커피 생두 가격 예측 모델링 시작 (target={target})")
         
         # 1. 데이터 로드
         weather_data = load_weather_data()
@@ -80,14 +85,14 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
         weather_data = add_volatility_features(weather_data)      # 그 다음 변동성 특성 추가
         
         # 4. train/test split
-        train_data, test_data = split_data(weather_data, train_ratio=0.8)  # 80% train, 20% test
+        train_data, test_data = split_data(weather_data, train_ratio=0.80)  # 80% train, 20% test
         
         # 5. 데이터 형태 디버깅 (None 체크가 있는 함수 사용)
         debug_data_shape(train_data, test_data)  # 로더는 아직 없으므로 인자 제거
         
         # 6. 데이터 준비
         train_loader, test_loader, scaler, test_dates, seq_length, pred_length \
-            = prepare_data_for_model(train_data, test_data)
+            = prepare_data_for_model(train_data, test_data, target=target)
         
         # 이제 로더가 준비되었으므로 더 자세한 디버깅 정보 출력
         debug_data_shape(train_data, test_data, train_loader, test_loader)
@@ -109,37 +114,14 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
         )
         
         # 9. 모델 평가
-        if online:
-            print("🔄 온라인 업데이트 방식으로 예측 수행 중...")
-
-            test_data_array = test_data.values if hasattr(test_data, 'values') else test_data
-
-            predictions, actuals = online_update_prediction(
-                model=model,
-                test_data=scaler.transform(test_data_array),
-                scaler=scaler,
-                seq_length=seq_length,
-                pred_length=pred_length,
-                device=device,
-                lr=lr,
-                loss_fn=loss_fn
-            )
-
-            attention_weights = None  # 온라인 방식에서는 attention 저장하지 않음
-            mae = np.mean(np.abs(predictions.flatten() - actuals.flatten()))
-            rmse = np.sqrt(np.mean((predictions.flatten() - actuals.flatten())**2))
-
-        else:
-            predictions, actuals, attention_weights, mae, rmse = predict_and_evaluate(
-                model, test_loader, scaler, device, test_dates
-            )
-        
-        # 10. 결과 저장 - 폴더 생성 및 결과 저장
         # 저장 폴더 이름 생성: loss 함수 및 에폭 정보 포함
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         folder_name = f"coffee_price_model_{loss_fn}_epochs{epochs}_{timestamp}"
+        predictions, actuals, attention_weights, mae, rmse = predict_and_evaluate(
+                model, test_loader, scaler, device, test_dates, folder_name=folder_name, target=target
+        )
         
-        # 11. 모델 및 결과 저장
+        # 10. 결과 저장 - 폴더 생성 및 결과 저장
         result_dir = save_model_results(
             model, 
             train_losses, 
@@ -147,10 +129,11 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
             predictions, 
             actuals, 
             test_dates=test_dates,
-            folder_name=folder_name
+            folder_name=folder_name,
+            target=target
         )
         
-        # 12. 성능 요약 시각화 - 동일한 폴더에 저장
+        # 11. 성능 요약 시각화 - 동일한 폴더에 저장
         visualization_summary(
             predictions, 
             actuals, 
@@ -159,10 +142,11 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
             mae, 
             rmse, 
             test_dates=test_dates,
-            folder_name=folder_name
+            folder_name=folder_name,
+            target=target
         )
         
-        # 13. 슬라이딩 윈도우 예측
+        # 12. 슬라이딩 윈도우 예측
         run_sliding = True
         if run_sliding:
             try:
@@ -177,11 +161,13 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
                     device=device,
                     stride=7,
                     folder_name=folder_name,
-                    test_dates=test_dates
+                    test_dates=test_dates,
+                    isOnline=online,
+                    target=target
                 )
 
                 # 슬라이딩 윈도우 예측 결과 시각화 (기존 메모리 기반 시각화 삭제)
-                from .utils import plot_sliding_window_from_csv
+                
                 csv_path = os.path.join(result_dir, 'sliding_window_predictions.csv')
                 plot_sliding_window_from_csv(
                     csv_path,
@@ -239,5 +225,6 @@ if __name__ == "__main__":
         delta=args.delta,
         epochs=args.epochs,
         lr=args.lr,
-        online=args.online
+        online=args.online,
+        target=args.target
     )
