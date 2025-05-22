@@ -109,37 +109,14 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
         )
         
         # 9. 모델 평가
-        if online:
-            print("🔄 온라인 업데이트 방식으로 예측 수행 중...")
-
-            test_data_array = test_data.values if hasattr(test_data, 'values') else test_data
-
-            predictions, actuals = online_update_prediction(
-                model=model,
-                test_data=scaler.transform(test_data_array),
-                scaler=scaler,
-                seq_length=seq_length,
-                pred_length=pred_length,
-                device=device,
-                lr=lr,
-                loss_fn=loss_fn
-            )
-
-            attention_weights = None  # 온라인 방식에서는 attention 저장하지 않음
-            mae = np.mean(np.abs(predictions.flatten() - actuals.flatten()))
-            rmse = np.sqrt(np.mean((predictions.flatten() - actuals.flatten())**2))
-
-        else:
-            predictions, actuals, attention_weights, mae, rmse = predict_and_evaluate(
-                model, test_loader, scaler, device, test_dates
-            )
-        
-        # 10. 결과 저장 - 폴더 생성 및 결과 저장
         # 저장 폴더 이름 생성: loss 함수 및 에폭 정보 포함
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         folder_name = f"coffee_price_model_{loss_fn}_epochs{epochs}_{timestamp}"
+        predictions, actuals, attention_weights, mae, rmse = predict_and_evaluate(
+                model, test_loader, scaler, device, test_dates, folder_name=folder_name
+        )
         
-        # 11. 모델 및 결과 저장
+        # 10. 결과 저장 - 폴더 생성 및 결과 저장
         result_dir = save_model_results(
             model, 
             train_losses, 
@@ -150,7 +127,7 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
             folder_name=folder_name
         )
         
-        # 12. 성능 요약 시각화 - 동일한 폴더에 저장
+        # 11. 성능 요약 시각화 - 동일한 폴더에 저장
         visualization_summary(
             predictions, 
             actuals, 
@@ -162,7 +139,7 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
             folder_name=folder_name
         )
         
-        # 13. 슬라이딩 윈도우 예측
+        # 12. 슬라이딩 윈도우 예측
         run_sliding = True
         if run_sliding:
             try:

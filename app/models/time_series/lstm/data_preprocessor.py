@@ -58,7 +58,8 @@ def leave_PRECTOTCORR_columns(df):
     until_cols = [col for col in df.columns if 'until' in col]
     
     # 남길 컬럼들
-    keep_cols = ['Date', 'Coffee_Price', 'Coffee_Price_Return'] \
+    keep_cols = ['Date', 'Coffee_Price', 'Coffee_Price_Return', 
+                 'Crude_Oil_Price', 'USD_BRL'] \
         + prectotcorr_cols \
         + until_cols \
         + season_tag_cols \
@@ -66,6 +67,9 @@ def leave_PRECTOTCORR_columns(df):
     
     # 남길 컬럼들로 필터링
     df = df[keep_cols]
+
+    # 학습에 사용된 컬럼 출력(기후 데이터는 많으므로 출력하지 않음)
+    print(df.columns)
     
     print(f"✅ PRECTOTCORR 관련 컬럼들만 남기기 성공: {df.shape}")
     return df
