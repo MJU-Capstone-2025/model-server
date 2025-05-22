@@ -519,8 +519,8 @@ def predict_and_evaluate(model, test_loader, scaler, device='cpu', test_dates=No
 
     return adj_pred_series.values, np.array(adj_actuals), attention_weights, mae, rmse
 
-def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stride=7, device='cpu', test_dates=None, folder_name=None, isOnline=False):
-    """슬라이딩 윈도우 방식으로 예측 (온라인 또는 일반)"""
+def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stride=14, device='cpu', test_dates=None, folder_name=None, isOnline=False, target='price'):
+    """슬라이딩 윈도우 방식으로 예측 (온라인 또는 일반, target: price/return)"""
     model.eval()
     print(f"[DEBUG] test_dates: {test_dates}")
     if test_dates is not None:
@@ -533,7 +533,13 @@ def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stri
     for i in range(0, len(data) - seq_length - pred_length + 1, stride):
         try:
             sequence = data[i:i+seq_length].copy()
-            actual = data[i+seq_length:i+seq_length+pred_length, 0].copy().reshape(-1)
+            # 실제값 추출 (target 분기)
+            if target == 'price':
+                actual = data[i+seq_length:i+seq_length+pred_length, 0].copy().reshape(-1)
+            elif target == 'return':
+                actual = data[i+seq_length:i+seq_length+pred_length, 1].copy().reshape(-1)
+            else:
+                raise ValueError(f'Unknown target: {target}')
             sequence_tensor = torch.FloatTensor(sequence).unsqueeze(0).to(device)
 
             # 예측
@@ -545,20 +551,40 @@ def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stri
             n_features = scaler.scale_.shape[0]
             pred_padded = np.zeros((pred_length, n_features))
             actual_padded = np.zeros((pred_length, n_features))
-            pred_padded[:, 0] = prediction
-            actual_padded[:, 0] = actual
-            prediction_rescaled = scaler.inverse_transform(pred_padded)[:, 0]
-            actual_rescaled = scaler.inverse_transform(actual_padded)[:, 0]
+            if target == 'price':
+                pred_padded[:, 0] = prediction
+                actual_padded[:, 0] = actual
+                prediction_rescaled = scaler.inverse_transform(pred_padded)[:, 0]
+                actual_rescaled = scaler.inverse_transform(actual_padded)[:, 0]
+                prediction_return = np.nan * np.ones_like(prediction_rescaled)
+                actual_return = np.nan * np.ones_like(actual_rescaled)
+                prediction_price = prediction_rescaled
+                actual_price = actual_rescaled
+            elif target == 'return':
+                pred_padded[:, 1] = prediction
+                actual_padded[:, 1] = actual
+                prediction_rescaled = scaler.inverse_transform(pred_padded)[:, 1]
+                actual_rescaled = scaler.inverse_transform(actual_padded)[:, 1]
+                # 누적 곱으로 price 환산 (윈도우 시작점 price 필요)
+                # 윈도우 시작점 price는 data[i+seq_length-1, 0] (정규화된 값) -> 역정규화
+                start_price_norm = data[i+seq_length-1, 0]
+                start_price = scaler.inverse_transform([[start_price_norm]+[0]*(n_features-1)])[0, 0]
+                prediction_price = returns_to_price(prediction_rescaled, start_price)
+                actual_price = returns_to_price(actual_rescaled, start_price)
+                prediction_return = prediction_rescaled
+                actual_return = actual_rescaled
+            else:
+                raise ValueError(f'Unknown target: {target}')
 
             # 변동성 완화 보정: 온라인 모드일 때만 적용
             if isOnline and i > 0:
-                previous_prediction = all_predictions[-1]['prediction'] if all_predictions else prediction_rescaled
-                change = (prediction_rescaled[0] - previous_prediction[0]) / 1 # 변화율 보정 안함
-                prediction_rescaled = previous_prediction + change
+                previous_prediction = all_predictions[-1]['prediction_price'] if all_predictions else prediction_price
+                change = (prediction_price[0] - previous_prediction[0]) / 1 # 변화율 보정 안함
+                prediction_price = previous_prediction + change
 
-            # 예측 결과 보정: 첫날 실제값과 예측값의 차이만큼 전체 예측값을 shift
-            shift = actual_rescaled[0] - prediction_rescaled[0]
-            prediction_rescaled = prediction_rescaled + shift
+            # 예측 결과 보정: 첫날 실제값과 예측값의 차이만큼 전체 예측값을 shift (price 기준)
+            shift = actual_price[0] - prediction_price[0]
+            prediction_price = prediction_price + shift
 
             # === 휴장일 보정 ===
             # 날짜 인덱스 생성 (test_dates가 있으면 그에 맞춰서, 없으면 None)
@@ -567,17 +593,19 @@ def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stri
                 start_idx = i + seq_length
                 end_idx = i + seq_length + pred_length
                 window_dates = test_dates[start_idx:end_idx]
-                if len(window_dates) == len(prediction_rescaled):
-                    pred_series = pd.Series(prediction_rescaled, index=pd.to_datetime(window_dates))
-                    prediction_rescaled = adjust_forecast_for_market_calendar(pred_series).values
+                if len(window_dates) == len(prediction_price):
+                    pred_series = pd.Series(prediction_price, index=pd.to_datetime(window_dates))
+                    prediction_price = adjust_forecast_for_market_calendar(pred_series).values
             # ===
 
-            # 예측 결과 저장
+            # 예측 결과 저장 (price/return 모두)
             prediction_info = {
                 'start_idx': i,
                 'end_idx': i + seq_length + pred_length,
-                'prediction': prediction_rescaled,
-                'actual': actual_rescaled,
+                'prediction_price': prediction_price,
+                'actual_price': actual_price,
+                'prediction_return': prediction_return,
+                'actual_return': actual_return,
                 'seq_length': seq_length,
                 'pred_length': pred_length
             }
@@ -598,8 +626,8 @@ def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stri
         except Exception as e:
             print(f"❌ 윈도우 {i} 예측 중 오류 발생: {e}")
             continue
-    
-    save_predictions_to_csv(all_predictions, test_dates, folder_name)
+    # price/return 모두 저장
+    save_predictions_to_csv(all_predictions, test_dates, folder_name, target=target)
     return all_predictions
 
 def setup_model(input_dim, use_entmax=False):
@@ -607,7 +635,7 @@ def setup_model(input_dim, use_entmax=False):
     print(f"⏳ 모델 설정 중...")
     
     hidden_dim = 128
-    output_dim = 14  # 14일 예측
+    output_dim = 28  # 14일 예측
     num_layers = 2
     dropout = 0.2
     
@@ -626,8 +654,8 @@ def setup_model(input_dim, use_entmax=False):
     
     return model, device
 
-def run_sliding_window_prediction(model, test_data, scaler, seq_length, pred_length, device, stride=1, folder_name=None, test_dates=None, isOnline=False):
-    """슬라이딩 윈도우 방식으로 예측 진행 (isOnline 파라미터 추가)"""
+def run_sliding_window_prediction(model, test_data, scaler, seq_length, pred_length, device, stride=1, folder_name=None, test_dates=None, isOnline=False, target='price'):
+    """슬라이딩 윈도우 방식으로 예측 진행 (isOnline 파라미터 추가, target: price/return)"""
     print(f"⏳ 슬라이딩 윈도우 예측 진행 중...")
     sliding_predictions = sliding_window_prediction(
         model, 
@@ -639,7 +667,8 @@ def run_sliding_window_prediction(model, test_data, scaler, seq_length, pred_len
         device=device, 
         test_dates=test_dates, 
         folder_name=folder_name,
-        isOnline=isOnline
+        isOnline=isOnline,
+        target=target
     )
     if not sliding_predictions:
         print("⚠️ 슬라이딩 윈도우 예측 결과가 없습니다.")

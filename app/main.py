@@ -32,7 +32,8 @@ async def lifespan(app: FastAPI):
         epochs = int(os.environ.get("COFFEE_MODEL_EPOCHS", "5"))
         lr = float(os.environ.get("COFFEE_MODEL_LR", "0.001"))
         online_flag = os.getenv("COFFEE_MODEL_ONLINE", "false").lower() == "true"
-        
+        target = os.environ.get("COFFEE_MODEL_TARGET", "price")
+
         print(f"📊 모델 하이퍼파라미터 - 손실 함수: {loss_fn}, Delta: {delta}, 에폭: {epochs}, 학습률: {lr}")
 
         # LSTM 모델 import 및 실행 (하이퍼파라미터 전달)
@@ -42,7 +43,8 @@ async def lifespan(app: FastAPI):
             delta=delta,
             epochs=epochs,
             lr=lr,
-            online=online_flag
+            online=online_flag,
+            target=target
         )
         print("✅ LSTM 모델 로드 완료")
         

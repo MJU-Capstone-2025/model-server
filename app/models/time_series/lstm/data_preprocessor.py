@@ -130,9 +130,9 @@ def prepare_data_for_model(train_data, test_data, target='price'):
     scaler = MinMaxScaler()
     train_scaled = scaler.fit_transform(train_data)
     test_scaled = scaler.transform(test_data)
-    # 시퀀스 생성 (50일 데이터로 14일 예측)
-    seq_length = 50
-    pred_length = 14
+    # 시퀀스 생성 (50일 데이터로 14일 예측) or (60일 데이터로 28일 예측)
+    seq_length = 60
+    pred_length = 28
     X_train, y_train = create_sequences(train_scaled, seq_length, pred_length, target=target, df=train_data)
     X_test, y_test = create_sequences(test_scaled, seq_length, pred_length, target=target, df=test_data)
     print(f"✅ 시퀀스 생성 완료 - X_train: {X_train.shape}, y_train: {y_train.shape}")

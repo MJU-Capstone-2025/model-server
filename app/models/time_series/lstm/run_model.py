@@ -48,7 +48,8 @@ def parse_arguments():
     
     parser.add_argument('--online', action='store_true',
                     help='온라인 업데이트 방식으로 예측 수행')
-    parser.add_argument('--target', type=str, default='price', choices=['price', 'return'],
+    
+    parser.add_argument('--target', type=str, choices=['price', 'return'],
                         help='예측 타겟 (price 또는 return)')
 
     return parser.parse_args()
@@ -70,7 +71,7 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False, target='pri
     """
     try:
         start_time = time.time()
-        print(f"�� 커피 생두 가격 예측 모델링 시작 (target={target})")
+        print(f"커피 생두 가격 예측 모델링 시작 (target={target})")
         
         # 1. 데이터 로드
         weather_data = load_weather_data()
@@ -84,7 +85,7 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False, target='pri
         weather_data = add_volatility_features(weather_data)      # 그 다음 변동성 특성 추가
         
         # 4. train/test split
-        train_data, test_data = split_data(weather_data, train_ratio=0.8)  # 80% train, 20% test
+        train_data, test_data = split_data(weather_data, train_ratio=0.80)  # 80% train, 20% test
         
         # 5. 데이터 형태 디버깅 (None 체크가 있는 함수 사용)
         debug_data_shape(train_data, test_data)  # 로더는 아직 없으므로 인자 제거
@@ -158,7 +159,7 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False, target='pri
                     seq_length, 
                     pred_length, 
                     device=device,
-                    stride=14,
+                    stride=7,
                     folder_name=folder_name,
                     test_dates=test_dates,
                     isOnline=online,
