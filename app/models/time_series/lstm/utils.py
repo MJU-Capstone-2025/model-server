@@ -315,7 +315,7 @@ def plot_sliding_window_from_csv(csv_path, max_windows=5, save_path=None):
         return
     
     # 윈도우 ID 85~89만 시각화
-    selected_windows = [1, 2, 3, 4, 5, 85, 86, 87, 88, 89]
+    selected_windows = [1, 2, 3, 4, 5, 41, 42, 43, 44, 45, 85, 86, 87, 88, 89]
     filtered_df = df[df['window_id'].isin(selected_windows)]
     grouped = filtered_df.groupby('window_id')
     n_samples = len(selected_windows)

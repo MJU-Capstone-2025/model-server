@@ -7,6 +7,7 @@
 import pandas as pd
 import os
 from .model import *
+from sklearn.preprocessing import MinMaxScaler
 
 def load_weather_data(data_path=None):
     """
@@ -68,10 +69,7 @@ def leave_PRECTOTCORR_columns(df):
     # 남길 컬럼들로 필터링
     df = df[keep_cols]
 
-    # 학습에 사용된 컬럼 출력(기후 데이터는 많으므로 출력하지 않음)
-    print(df.columns)
-    
-    print(f"✅ PRECTOTCORR 관련 컬럼들만 남기기 성공: {df.shape}")
+    print(f"✅ PRECTOTCORR 관련 + 실시간 수집 가능한 경제 데이터들만 남기기 성공: {df.shape}")
     return df
 
 def split_data(df, train_ratio=0.8):
@@ -123,36 +121,28 @@ def add_volatility_features(df, price_col='Coffee_Price', return_col='Coffee_Pri
     print(f"✅ 변동성 관련 파생 피처 추가 성공: {df.shape}")
     return df
 
-def prepare_data_for_model(train_data, test_data):
-    """모델 학습을 위한 데이터 준비"""
-    
+def prepare_data_for_model(train_data, test_data, target='price'):
+    """모델 학습을 위한 데이터 준비 (target: price/return)"""
     # 날짜 정보 저장
     train_dates = train_data.index
     test_dates = test_data.index
-    
     # 정규화를 위한 스케일러
     scaler = MinMaxScaler()
     train_scaled = scaler.fit_transform(train_data)
     test_scaled = scaler.transform(test_data)
-    
     # 시퀀스 생성 (50일 데이터로 14일 예측)
     seq_length = 50
     pred_length = 14
-    
-    X_train, y_train = create_sequences(train_scaled, seq_length, pred_length)
-    X_test, y_test = create_sequences(test_scaled, seq_length, pred_length)
-    
+    X_train, y_train = create_sequences(train_scaled, seq_length, pred_length, target=target, df=train_data)
+    X_test, y_test = create_sequences(test_scaled, seq_length, pred_length, target=target, df=test_data)
     print(f"✅ 시퀀스 생성 완료 - X_train: {X_train.shape}, y_train: {y_train.shape}")
     print(f"✅ 시퀀스 생성 완료 - X_test: {X_test.shape}, y_test: {y_test.shape}")
-    
     # 데이터셋 및 데이터로더 생성
     train_dataset = TimeSeriesDataset(torch.FloatTensor(X_train), torch.FloatTensor(y_train))
     test_dataset = TimeSeriesDataset(torch.FloatTensor(X_test), torch.FloatTensor(y_test))
-    
     batch_size = 32
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-    
     return train_loader, test_loader, scaler, test_dates[-len(X_test):], seq_length, pred_length
 
 def encode_categorical_features(df):
@@ -181,4 +171,27 @@ def encode_categorical_features(df):
     
     print(f"✅ 범주형 특성 인코딩 성공: {df.shape}")
     return df
+
+def create_sequences(data, seq_length, pred_length, target='price', df=None):
+    """시계열 데이터 윈도우 생성: seq_length일의 데이터로 pred_length일 예측 (target: price/return)"""
+    xs, ys = [], []
+    # target 인덱스 결정
+    if df is not None:
+        columns = list(df.columns)
+        price_col_idx = columns.index('Coffee_Price') if 'Coffee_Price' in columns else 0
+        return_col_idx = columns.index('Coffee_Price_Return') if 'Coffee_Price_Return' in columns else 1
+    else:
+        price_col_idx = 0
+        return_col_idx = 1
+    for i in range(len(data) - seq_length - pred_length + 1):
+        x = data[i:(i + seq_length)]
+        if target == 'price':
+            y = data[(i + seq_length):(i + seq_length + pred_length), price_col_idx]
+        elif target == 'return':
+            y = data[(i + seq_length):(i + seq_length + pred_length), return_col_idx]
+        else:
+            raise ValueError(f"Unknown target: {target}")
+        xs.append(x)
+        ys.append(y)
+    return np.array(xs), np.array(ys)
 
