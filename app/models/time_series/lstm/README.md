@@ -82,9 +82,13 @@ uvicorn main:app --reload
 
 > `data/output/result`에 저장된다.
 
+-   모델 저장(`coffee_price_model.pth`)
+-   사용된 하이퍼 파라미터(`hyperparameters.txt`)
 -   예측 결과 그래프 (`prediction_sample.png`)
 -   학습 손실 시각화 (`training_loss.png`)
--   전체 성능 요약 (`model_performance_summary.pn`g)
+-   전체 성능 요약 (`model_performance_summary.png`)
+-   슬라이딩 윈도우 예측 결과 (`sliding_window_predictions.csv`)
+-   슬라이딩 윈도우 예측 결과 이미지 (`sliding_window_predictions.png`)
 -   성능 지표 (`metrics.txt`)
     -   MAE
     -   RMSE
@@ -96,11 +100,6 @@ uvicorn main:app --reload
 ```
 run_sliding = True  # 코드 내에서 활성화
 ```
-
-## 라이선스
-
-MIT License
-Copyright (c) 2025
 
 ## 모델 리뷰
 
@@ -166,3 +165,8 @@ Copyright (c) 2025
 현재 모델은 커피 생두 가격의 전반적인 추세를 잘 포착하고 있으나, 급격한 가격 변동에 대한 예측력이 제한적이다. Huber Loss의 사용은 이상치에 강건한 학습을 가능하게 하지만, 여전히 극단적 가격 변동을 과소 예측하는 경향이 있다.
 
 추가 학습 에폭과 앙상블 접근법 도입을 통해 모델의 예측 정확도를 더욱 향상시킬 수 있을 것으로 기대된다. 또한 모델의 출력을 단일 예측값이 아닌 확률적 예측 범위로 확장하는 것도 사용자에게 더 유용한 정보를 제공할 수 있을 것이다.
+
+## 라이선스
+
+MIT License
+Copyright (c) 2025

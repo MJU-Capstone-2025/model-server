@@ -9,6 +9,8 @@ from sklearn.preprocessing import MinMaxScaler
 import os
 import warnings
 import datetime
+from .utils import get_result_dir
+
 warnings.filterwarnings('ignore')
 
 # Entmax15 구현 (Softmax 대체)
@@ -129,7 +131,7 @@ class LSTMAttentionSoftmax(nn.Module):
         
         return output, att_weights
 
-# 수정된 LSTM + Attention + Entmax 모델 정의 (안전한 버전)
+# LSTM + Attention + Entmax 모델 정의 -> 안씀 
 class LSTMAttentionEntmax(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers, dropout=0.2, use_entmax=True):
         super(LSTMAttentionEntmax, self).__init__()
@@ -179,7 +181,7 @@ class LSTMAttentionEntmax(nn.Module):
             try:
                 att_weights = self.attention_fn(att_energies)  # (batch_size, seq_len)
             except Exception as e:
-                print(f"[경고] Attention 계산 중 오류 발생: {e}. Softmax로 대체합니다.")
+                print(f"⚠️ Attention 계산 중 오류 발생: {e}. Softmax로 대체합니다.")
                 # Fallback: Softmax 사용
                 att_weights = F.softmax(att_energies, dim=1)
             
@@ -435,13 +437,15 @@ def predict_and_evaluate(model, test_loader, scaler, device='cpu', test_dates=No
     
     return predictions_rescaled, actuals_rescaled, attention_weights, mae, rmse
 
-def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stride=1, device='cpu', test_dates=None, folder_name=None):
+def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stride=7, device='cpu', test_dates=None, folder_name=None):
     """슬라이딩 윈도우 방식으로 예측"""
     model.eval()
     print(f"[DEBUG] test_dates: {test_dates}")
     if test_dates is not None:
         test_dates = [d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d) for d in test_dates]
     all_predictions = []
+
+    # 슬라이딩 윈도우 방식으로 예측
     for i in range(0, len(data) - seq_length - pred_length + 1, stride):
         try:
             sequence = data[i:i+seq_length].copy()
@@ -497,6 +501,8 @@ def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stri
                     else:
                         last_date_dt = last_date
                     dates = [(last_date_dt + datetime.timedelta(days=k+1)).strftime('%Y-%m-%d') for k in range(pred_length)]
+
+            # 예측 결과 저장
             prediction_info = {
                 'start_idx': i,
                 'end_idx': i + seq_length + pred_length,
@@ -505,22 +511,30 @@ def sliding_window_prediction(model, data, scaler, seq_length, pred_length, stri
                 'seq_length': seq_length,
                 'pred_length': pred_length
             }
+
             if dates is not None:
                 prediction_info['dates'] = dates
             all_predictions.append(prediction_info)
         except Exception as e:
             print(f"❌ 윈도우 {i} 예측 중 오류 발생: {e}")
             continue
+
+    # 각 윈도우마다 첫날 실제-예측값을 각 윈도우의 2주간 예측값에 첫날 값을 더해서 보정
+    for i, pred_data in enumerate(all_predictions):
+        if i == 0:
+            pred_data['prediction'] = pred_data['prediction'] + (pred_data['actual'][0] - pred_data['prediction'][0])
+        else:
+            pred_data['prediction'] = pred_data['prediction'] + (pred_data['actual'][0] - all_predictions[i-1]['prediction'][-1])
+        pred_data['actual'] = pred_data['actual'] + (pred_data['actual'][0] - all_predictions[i-1]['prediction'][-1])
+
+        
+
     if folder_name:
         save_predictions_to_csv(all_predictions, test_dates, folder_name=folder_name)
     return all_predictions
 
 def save_predictions_to_csv(all_predictions, test_dates=None, folder_name=None):
-    import pandas as pd
-    import os
-    import numpy as np
-    from datetime import datetime
-    from .utils import get_result_dir
+
     try:
         result_dir = get_result_dir(folder_name)
         csv_path = os.path.join(result_dir, 'sliding_window_predictions.csv')

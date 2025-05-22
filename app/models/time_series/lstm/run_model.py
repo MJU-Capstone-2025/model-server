@@ -175,7 +175,7 @@ def main(loss_fn='mse', delta=1.0, epochs=5, lr=0.001, online=False):
                     seq_length, 
                     pred_length, 
                     device=device,
-                    stride=1,
+                    stride=7,
                     folder_name=folder_name,
                     test_dates=test_dates
                 )

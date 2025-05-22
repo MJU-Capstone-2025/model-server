@@ -46,3 +46,5 @@ http://localhost:8000/train?loss_fn=huber&delta=0.5&epochs=10&lr=0.001
 5. 결과 시각화 및 저장: 예측 결과를 다양한 형태로 시각화하고 CSV 파일로 저장하는 과정이다.
 
 6. 슬라이딩 윈도우 예측: 연속적인 시간 구간에 대해 예측을 수행하고 결과를 시각화하는 단계다.
+
+> 참고: [모델 링크](./models/time_series/lstm/)
