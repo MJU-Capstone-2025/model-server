@@ -43,6 +43,8 @@
 
 모델은 LSTM(Long Short-Term Memory)과 Attention 메커니즘을 결합한 심층 신경망 구조를 채택하였다. 이는 인코더-디코더 방식이 아닌, 시퀀스 입력 후 단일 예측 출력을 생성하는 방식으로 설계되었다. 구체적으로는 50일 시퀀스를 입력으로 받아 향후 14일의 가격을 예측하는 구조이다.
 
+> [코드 링크](../app/models/time_series/lstm/)
+
 ### 3.2 Why LSTM + Attention?
 
 LSTM과 Attention 메커니즘을 결합한 모델을 선택한 근거는 다음과 같다.
