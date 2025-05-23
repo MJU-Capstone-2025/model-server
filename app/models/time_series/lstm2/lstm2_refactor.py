@@ -405,17 +405,17 @@ def evaluate_model(model, test_loader, scaler, test_df, target_col="target_volat
     
     return predictions, true_values, date_ranges, rmse, mae
 
-def visualize_results(predictions, true_values, date_ranges, title="변동성 예측 결과"):
+def visualize_results(predictions, true_values, date_ranges, title="Volatility Prediction Results"):
     """결과 시각화"""
     pred_series = pd.Series(predictions, index=date_ranges)
     true_series = pd.Series(true_values, index=date_ranges)
     
     plt.figure(figsize=(15, 8))
-    plt.plot(true_series.sort_index(), label='실제 변동성', linewidth=2)
-    plt.plot(pred_series.sort_index(), label='예측 변동성', linestyle='--', linewidth=2)
+    plt.plot(true_series.sort_index(), label='Actual Volatility', linewidth=2)
+    plt.plot(pred_series.sort_index(), label='Predicted Volatility', linestyle='--', linewidth=2)
     plt.title(title, fontsize=16)
-    plt.xlabel('날짜', fontsize=12)
-    plt.ylabel('변동성', fontsize=12)
+    plt.xlabel('Date', fontsize=12)
+    plt.ylabel('Volatility', fontsize=12)
     plt.grid(True, alpha=0.3)
     plt.legend(fontsize=12)
     plt.tight_layout()
@@ -524,9 +524,9 @@ def main():
         
         plt.figure(figsize=(12, 6))
         plt.plot(sim_prices.index, sim_prices.values, linewidth=2)
-        plt.title(f"시뮬레이션된 가격 곡선 (시작일: {sample_date.date()}, 변동성: {sample_vol:.4f})")
-        plt.xlabel('날짜')
-        plt.ylabel('시뮬레이션 가격')
+        plt.title(f"Simulated Price Curve (Start Date: {sample_date.date()}, Volatility: {sample_vol:.4f})")
+        plt.xlabel('Date')
+        plt.ylabel('Simulated Price')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
