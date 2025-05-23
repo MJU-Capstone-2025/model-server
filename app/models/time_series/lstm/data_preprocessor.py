@@ -54,7 +54,7 @@ def leave_PRECTOTCORR_columns(df):
     """
     # 'PRECTOTCORR', 'season_tag', 'until' 관련 컬럼들
     prectotcorr_cols = [col for col in df.columns if 'PRECTOTCORR' in col]
-    t2m_cols = [col for col in df.columns if 'T2M' in col]
+    # t2m_cols = [col for col in df.columns if 'T2M' in col]
     season_tag_cols = [col for col in df.columns if 'season_tag' in col]
     until_cols = [col for col in df.columns if 'until' in col]
     
@@ -119,6 +119,7 @@ def add_volatility_features(df, price_col='Coffee_Price', return_col='Coffee_Pri
     df.dropna(inplace=True)
     
     print(f"✅ 변동성 관련 파생 피처 추가 성공: {df.shape}")
+    print(f"전체 피쳐 출력: {df.columns}")
     return df
 
 def prepare_data_for_model(train_data, test_data, target='price'):
