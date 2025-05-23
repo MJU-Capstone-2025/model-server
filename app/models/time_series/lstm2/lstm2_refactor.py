@@ -82,7 +82,7 @@ def create_features(df):
     
     # 타겟 변수 (shit에 의해서 미래 데이터를 참고하는 경향이 있음)
     df["target_volatility_14d"] = df["log_return"].rolling(window=14).std()\
-        # .shift(-13)
+        .shift(-13)
     
     # 변동성 피처들
     df['volatility_5d'] = df['Coffee_Price_Return'].rolling(window=5).std()

@@ -57,6 +57,7 @@ $env:COFFEE_MODEL_DELTA = "1.0"
 $env:COFFEE_MODEL_EPOCHS = "5"
 $env:COFFEE_MODEL_LR = "0.001"
 $env:COFFEE_MODEL_ONLINE = "False"
+$env:COFFEE_MODEL_TARGET = "price"   # price or return
 
 # 환경 변수 확인
 $env:COFFEE_MODEL_LOSS_FN
@@ -64,6 +65,7 @@ $env:COFFEE_MODEL_DELTA
 $env:COFFEE_MODEL_EPOCHS
 $env:COFFEE_MODEL_LR
 $env:COFFEE_MODEL_ONLINE
+$env:COFFEE_MODEL_TARGET
 
 # 서버 실행
 uvicorn main:app --reload
