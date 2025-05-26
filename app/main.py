@@ -1,59 +1,109 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import pandas as pd
 import numpy as np
+import sys
 import os
 from datetime import datetime
-from typing import Optional
+
+def setup_entmax_model_path():
+    """LSTM-Entmax 모델 경로를 sys.path에 추가"""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    lstm_entmax_path = os.path.join(current_dir, "models", "time_series", "lstm-entmax")
+    if lstm_entmax_path not in sys.path:
+        sys.path.append(lstm_entmax_path)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     앱 시작 시 실행되는 lifespan 이벤트 핸들러
-    여기서 LSTM 모델을 실행.
+    여기서 LSTM-Entmax 모델을 실행.
     """
     print("\n===== API 서버 시작 =====")
-    print("⏳ LSTM 모델 로드 중...")
+    print("⏳ LSTM-Entmax 모델 로드 중...")
+    
     try:
-        import sys
-        import os
-        # app의 상위 디렉토리를 sys.path에 추가
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        root_dir = os.path.abspath(os.path.join(current_dir, ".."))
-        if root_dir not in sys.path:
-            sys.path.append(root_dir)
-
-        # 기본 하이퍼파라미터 (환경 변수나 설정 파일에서 가져올 수도 있음)
-        loss_fn = os.environ.get("COFFEE_MODEL_LOSS_FN", "mse")
-        delta = float(os.environ.get("COFFEE_MODEL_DELTA", "1.0"))
+        # 환경 변수에서 하이퍼파라미터 로드
         epochs = int(os.environ.get("COFFEE_MODEL_EPOCHS", "5"))
         lr = float(os.environ.get("COFFEE_MODEL_LR", "0.001"))
-        online_flag = os.getenv("COFFEE_MODEL_ONLINE", "false").lower() == "true"
-        target = os.environ.get("COFFEE_MODEL_TARGET", "price")
+        window = int(os.environ.get("COFFEE_MODEL_WINDOW", "100"))
+        horizon = int(os.environ.get("COFFEE_MODEL_HORIZON", "14"))
+        hidden_size = int(os.environ.get("COFFEE_MODEL_HIDDEN_SIZE", "64"))
+        num_layers = int(os.environ.get("COFFEE_MODEL_NUM_LAYERS", "2"))
 
-        print(f"📊 모델 하이퍼파라미터 - 손실 함수: {loss_fn}, Delta: {delta}, 에폭: {epochs}, 학습률: {lr}")
-
-        # LSTM 모델 import 및 실행 (하이퍼파라미터 전달)
-        from models.time_series.lstm import run_model
-        model_results = run_model.main(
-            loss_fn=loss_fn,
-            delta=delta,
-            epochs=epochs,
-            lr=lr,
-            online=online_flag,
-            target=target
-        )
-        print("✅ LSTM 모델 로드 완료")
+        print(f"📊 모델 하이퍼파라미터 - 에폭: {epochs}, 학습률: {lr}, 윈도우: {window}")
         
-        # 모델 결과 저장 (app.state에 저장하여 API 엔드포인트에서 사용 가능)
+        # 모델 경로 설정 및 실행
+        setup_entmax_model_path()
+        
+        try:
+            # subprocess로 run_model.py를 별도 프로세스에서 실행
+            import subprocess
+            import sys
+            
+            run_model_path = os.path.join(os.path.dirname(__file__), "models", "time_series", "lstm-entmax", "run_model.py")
+            
+            cmd = [
+                sys.executable, run_model_path,
+                '--epochs', str(epochs),
+                '--lr', str(lr),
+                '--window', str(window),
+                '--horizon', str(horizon),
+                '--hidden_size', str(hidden_size),
+                '--num_layers', str(num_layers),
+                '--no_plot'  # 서버에서는 시각화 비활성화
+            ]
+            
+            print(f"🚀 모델 실행 명령어: {' '.join(cmd)}")
+            
+            # subprocess로 실행
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(__file__))
+            
+            if result.returncode == 0:
+                print("✅ 모델 실행 완료")
+                print(result.stdout)
+            else:
+                print(f"❌ 모델 실행 실패: {result.stderr}")
+                raise Exception(f"Model execution failed: {result.stderr}")
+            
+            model_results = {
+                'hyperparams': {
+                    'model_type': 'LSTM-Entmax',
+                    'window_size': window,
+                    'horizon': horizon,
+                    'epochs': epochs,
+                    'learning_rate': lr,
+                    'hidden_size': hidden_size,
+                    'num_layers': num_layers
+                },
+                'mae': None,  # run_model.py에서 직접 CSV로 저장
+                'rmse': None
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Entmax 모델 실행 실패: {e}")
+            # 기존 LSTM 모델로 fallback
+            from models.time_series.lstm import run_model
+            model_results = run_model.main(
+                loss_fn="mse",
+                delta=1.0,
+                epochs=epochs,
+                lr=lr,
+                online=False,
+                target="price"
+            )
+        
+        print("✅ LSTM-Entmax 모델 로드 완료")
         app.state.model_results = model_results
+        
     except Exception as e:
-        print(f"❌ LSTM 모델 로드 중 오류 발생: {str(e)}")
+        print(f"❌ 모델 로드 중 오류 발생: {str(e)}")
         import traceback
         print(traceback.format_exc())
+        
     yield
     print("\n===== API 서버 종료 =====")
 
@@ -69,7 +119,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-CSV_PATH = "./data/output/coffee_price.csv"
+CSV_PATH = "./data/output/prediction_result.csv"
 
 @app.get("/prediction")
 async def get_predictions():
@@ -170,15 +220,56 @@ async def train_model(
                 }
             )
         
-        # LSTM 모델 import 및 실행
-        from models.time_series.lstm import run_model
-        model_results = run_model.main(
-            loss_fn=loss_fn,
-            delta=delta,
-            epochs=epochs,
-            lr=lr,
-            online=online_flag
-        )
+        # 모델 경로 설정 및 실행
+        setup_entmax_model_path()
+        
+        try:
+            # subprocess로 run_model.py를 별도 프로세스에서 실행
+            import subprocess
+            import sys
+            
+            run_model_path = os.path.join(os.path.dirname(__file__), "models", "time_series", "lstm-entmax", "run_model.py")
+            
+            cmd = [
+                sys.executable, run_model_path,
+                '--epochs', str(epochs),
+                '--lr', str(lr),
+                '--no_plot'  # 서버에서는 시각화 비활성화
+            ]
+            
+            print(f"🚀 모델 재학습 명령어: {' '.join(cmd)}")
+            
+            # subprocess로 실행
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(__file__))
+            
+            if result.returncode == 0:
+                print("✅ 모델 재학습 완료")
+                print(result.stdout)
+            else:
+                print(f"❌ 모델 재학습 실패: {result.stderr}")
+                raise Exception(f"Model execution failed: {result.stderr}")
+            
+            model_results = {
+                'hyperparams': {
+                    'model_type': 'LSTM-Entmax',
+                    'epochs': epochs,
+                    'learning_rate': lr
+                },
+                'mae': None,  # run_model.py에서 직접 CSV로 저장
+                'rmse': None
+            }
+            
+        except Exception as e:
+            print(f"⚠️ Entmax 모델 실행 실패: {e}")
+            # 기존 LSTM 모델로 fallback
+            from models.time_series.lstm import run_model
+            model_results = run_model.main(
+                loss_fn=loss_fn,
+                delta=delta,
+                epochs=epochs,
+                lr=lr,
+                online=online_flag
+            )
         
         # 모델 결과 저장
         app.state.model_results = model_results
