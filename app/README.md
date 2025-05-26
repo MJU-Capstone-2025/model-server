@@ -8,16 +8,10 @@
 cd app
 
 # PowerShell에서 환경 변수 설정
-$env:COFFEE_MODEL_LOSS_FN = "huber"
-$env:COFFEE_MODEL_DELTA = "0.5"
-$env:COFFEE_MODEL_EPOCHS = "10"
-$env:COFFEE_MODEL_LR = "0.001"
+$env:COFFEE_MODEL_WINDOW="24"
 
 # 환경 변수 확인
-$env:COFFEE_MODEL_LOSS_FN
-$env:COFFEE_MODEL_DELTA
-$env:COFFEE_MODEL_EPOCHS
-$env:COFFEE_MODEL_LR
+$env:COFFEE_MODEL_WINDOW
 
 # 서버 실행
 uvicorn main:app --reload
