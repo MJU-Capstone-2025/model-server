@@ -70,11 +70,3 @@
     패키지 초기화 및 주요 함수/클래스 export
 
 ---
-
-## 참고
-
--   Entmax 어텐션 논문:  
-    _Peters, M. E., et al. "Sparse Sequence-to-Sequence Models." arXiv preprint arXiv:1905.05702 (2019)._
--   yfinance, pandas, torch 등 주요 라이브러리 사용
-
----
