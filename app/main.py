@@ -121,7 +121,7 @@ app.add_middleware(
 
 CSV_PATH = "./data/output/prediction_result.csv"
 
-@app.get("/prediction")
+@app.get("/prediction-dev")
 async def get_predictions():
     try:
         # 파일 존재 여부 확인

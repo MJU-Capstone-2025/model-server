@@ -162,6 +162,27 @@ def predict_and_inverse(model, test_loader, scaler, train_df, test_df, df, targe
     forecast_all = pd.concat(predictions, axis=1).mean(axis=1)
     return forecast_all, predictions
 
+def predict_long_future(model, df, scaler, static_feat_idx, data_window, total_days, horizon, price_col, target_col):
+    """
+    horizon 단위로 반복 예측하여 total_days만큼 미래를 예측
+    """
+    all_future_prices = []
+    all_future_dates = []
+    last_df = df.copy()
+    for i in range(0, total_days, horizon):
+        cur_horizon = min(horizon, total_days - i)
+        future_price_series, future_dates, price_future = predict_future(
+            model, last_df, last_df, scaler, static_feat_idx, data_window, cur_horizon, price_col, target_col
+        )
+        all_future_prices.extend(price_future)
+        all_future_dates.extend(future_dates)
+        for date, price in zip(future_dates, price_future):
+            row = last_df.iloc[-1].copy()
+            row[price_col] = price
+            row[target_col] = np.nan
+            row.name = date
+            last_df = pd.concat([last_df, pd.DataFrame([row])])
+    return pd.Series(all_future_prices, index=all_future_dates), pd.DatetimeIndex(all_future_dates), all_future_prices
 
 def predict_future(model, test_df, train_df, scaler, static_feat_idx, data_window, 
                   future_target, price_col, target_col):
@@ -199,6 +220,10 @@ def predict_future(model, test_df, train_df, scaler, static_feat_idx, data_windo
         y_pred_future, _ = model(x_seq_input, x_static_input)
         y_pred_future = y_pred_future.squeeze(0).cpu().numpy()
     
+    # future_target이 모델 출력보다 작으면 앞부분만 사용
+    if future_target < len(y_pred_future):
+        y_pred_future = y_pred_future[:future_target]
+    
     # 수익률 역정규화
     dummy = np.zeros((future_target, len(train_df.columns)))
     return_idx = train_df.columns.get_loc(target_col)
@@ -220,7 +245,7 @@ def predict_future(model, test_df, train_df, scaler, static_feat_idx, data_windo
     return future_price_series, future_dates, price_future
 
 
-def evaluate_and_save(df, forecast_all, predictions, price_col, future_dates, price_future):
+def evaluate_and_save(df, forecast_all, predictions, price_col, future_dates, price_future, data_path=None):
     """
     예측 결과를 평가하고 CSV 파일로 저장합니다.
     
@@ -231,6 +256,7 @@ def evaluate_and_save(df, forecast_all, predictions, price_col, future_dates, pr
         price_col (str): 가격 컬럼명
         future_dates (pd.DatetimeIndex): 미래 예측 날짜
         price_future (list): 미래 예측 가격 리스트
+        data_path (str, optional): 저장할 파일 경로. None이면 기본 경로 사용.
     """
     # 성능 평가
     actual = df.loc[forecast_all.index, price_col]
@@ -263,6 +289,9 @@ def evaluate_and_save(df, forecast_all, predictions, price_col, future_dates, pr
     })
     
     # 전체 결과 결합 및 저장
-    full_df = pd.concat([result_df, future_df], ignore_index=True)
-    full_df.drop_duplicates(subset=["Date"], inplace=True)
-    save_result(full_df) 
+    X_all = pd.concat([
+        pd.DataFrame(result_df, columns=["Date", "Predicted_Price", "Actual_Price"]),
+        pd.DataFrame(future_df, columns=["Date", "Predicted_Price", "Actual_Price"])
+    ], axis=0)
+    X_all.drop_duplicates(subset=["Date"], inplace=True)
+    save_result(X_all, data_path) 

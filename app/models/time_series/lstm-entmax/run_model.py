@@ -8,6 +8,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import argparse
+import numpy as np
 
 # 로컬 모듈 import (절대 import로 변경)
 try:
@@ -18,6 +19,8 @@ try:
     from .models import AttentionLSTMModel
     from .trainer import train_model, predict_and_inverse, predict_future, evaluate_and_save
     from .visualizer import plot_loss, plot_prediction
+    from .data_loader import save_result
+    from .trainer import predict_long_future
 except ImportError:
     # 직접 실행될 때
     from utils import get_device
@@ -26,6 +29,8 @@ except ImportError:
     from models import AttentionLSTMModel
     from trainer import train_model, predict_and_inverse, predict_future, evaluate_and_save
     from visualizer import plot_loss, plot_prediction
+    from data_loader import save_result
+    from trainer import predict_long_future
 
 
 def parse_arguments():
@@ -238,6 +243,64 @@ def main():
     evaluate_and_save(df, forecast_all, predictions, price_col, future_dates, price_future)
     
     print("=== 커피 가격 예측 모델 완료 ===")
+
+    # 16. 전체 데이터로 재학습 및 1년 예측/저장
+    print("\n[추가 기능] 전체 데이터로 재학습 및 1년 예측/저장 시작...")
+    # 전체 데이터셋 준비
+    X_all = np.concatenate([X_train, X_test], axis=0)
+    y_all = np.concatenate([y_train, y_test], axis=0)
+    all_df = pd.concat([train_df, test_df], axis=0)
+    all_df = all_df.loc[~all_df.index.duplicated(keep='first')]
+    all_dataset = MultiStepTimeSeriesDataset(X_all, y_all, args.window, args.horizon, args.step, static_feat_idx)
+    all_loader = torch.utils.data.DataLoader(all_dataset, batch_size=args.batch_size, shuffle=True)
+
+    # 새 모델 인스턴스 생성
+    model_all = AttentionLSTMModel(
+        input_size=input_size,
+        hidden_size=args.hidden_size,
+        num_layers=args.num_layers,
+        target_size=args.horizon,
+        dropout=args.dropout,
+        static_feat_dim=static_feat_dim
+    ).to(device)
+    optimizer_all = torch.optim.Adam(model_all.parameters(), lr=args.lr)
+    scheduler_all = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_all, mode='min', factor=0.3, patience=10)
+    base_criterion_all = nn.MSELoss()
+
+    # 재학습
+    print("전체 데이터로 모델 재학습 중...")
+    train_model(
+        model_all, all_loader, all_loader, base_criterion_all, optimizer_all, scheduler_all,
+        args.epochs, args.alpha, args.beta, device
+    )
+
+    # 오늘 날짜 기준 1년(365일) 예측
+    from datetime import datetime, timedelta
+    today = pd.to_datetime(datetime.today().date())
+    # all_df의 마지막 구간을 기준으로 예측
+    future_price_series, future_dates, price_future = predict_long_future(
+        model_all, all_df, scaler, static_feat_idx, args.window, 365, args.horizon, price_col, target_col
+    )
+
+    # 예측 결과 저장
+    future_price_series.index = pd.date_range(start=df.index[-1] + pd.Timedelta(days=1), periods=365, freq='D')
+
+    # 예측 결과 평가 및 저장
+    evaluate_and_save(
+        all_df, future_price_series, [future_price_series], price_col, future_dates, price_future,
+        data_path=None  # 아래에서 파일명 지정
+    )
+    # prediction_result_future.csv로 저장
+    
+    save_result(
+        pd.DataFrame({
+            "Date": future_price_series.index,
+            "Predicted_Price": future_price_series.values,
+            "Actual_Price": [None]*len(future_price_series)
+        }),
+        data_path="../data/output/prediction_result_future.csv"
+    )
+    print("[추가 기능] 전체 데이터 재학습 및 1년 예측/저장 완료!")
 
 
 if __name__ == "__main__":
