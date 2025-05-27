@@ -97,7 +97,7 @@ app.add_middleware(
 )
 
 DEV_CSV_PATH = "./data/output/prediction_result.csv"
-CSV_PATH = "./data/output/prediction_result_future_1year.csv"
+CSV_PATH = "./data/output/prediction_result_56days.csv"
 
 def create_error_response(status_code: int, message: str):
     """에러 응답을 생성하는 헬퍼 함수"""

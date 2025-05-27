@@ -20,8 +20,6 @@ try:
     from .models import AttentionLSTMModel
     from .trainer import train_model, predict_and_inverse, predict_future, evaluate_and_save
     from .visualizer import plot_loss, plot_prediction
-    from .data_loader import save_result
-    from .trainer import predict_long_future
     from .coffee_price_fetcher import enhance_predictions_with_actual_prices
 except ImportError:
     # 직접 실행될 때
@@ -31,8 +29,6 @@ except ImportError:
     from models import AttentionLSTMModel
     from trainer import train_model, predict_and_inverse, predict_future, evaluate_and_save
     from visualizer import plot_loss, plot_prediction
-    from data_loader import save_result
-    from trainer import predict_long_future
     from coffee_price_fetcher import enhance_predictions_with_actual_prices
 
 
@@ -120,7 +116,6 @@ def print_usage_examples():
     print("7. 전체 옵션 확인:")
     print("   python run_model.py --help")
     print()
-
 
 def main():
     """
@@ -232,7 +227,7 @@ def main():
         args.horizon, price_col, target_col
     )
     
-    # 14. 전체 결과 시각화 (테스트 + 미래)
+# 14. 전체 결과 시각화 (테스트 + 미래)
     if not args.no_plot:
         plot_prediction(
             df, forecast_all, 
@@ -247,87 +242,121 @@ def main():
     
     print("=== 커피 가격 예측 모델 완료 ===")
 
-    # 16. 전체 데이터로 재학습 및 1년 예측/저장
-    print("\n[추가 기능] 전체 데이터로 재학습 및 1년 예측/저장 시작...")
-    # 전체 데이터셋 준비
-    X_all = np.concatenate([X_train, X_test], axis=0)
-    y_all = np.concatenate([y_train, y_test], axis=0)
-    all_df = pd.concat([train_df, test_df], axis=0)
-    all_df = all_df.loc[~all_df.index.duplicated(keep='first')]
-    all_dataset = MultiStepTimeSeriesDataset(X_all, y_all, args.window, args.horizon, args.step, static_feat_idx)
-    all_loader = torch.utils.data.DataLoader(all_dataset, batch_size=args.batch_size, shuffle=True)
-
-    # 새 모델 인스턴스 생성
-    model_all = AttentionLSTMModel(
-        input_size=input_size,
-        hidden_size=args.hidden_size,
-        num_layers=args.num_layers,
-        target_size=args.horizon,
-        dropout=args.dropout,
-        static_feat_dim=static_feat_dim
-    ).to(device)
-    optimizer_all = torch.optim.Adam(model_all.parameters(), lr=args.lr)
-    scheduler_all = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_all, mode='min', factor=0.3, patience=10)
-    base_criterion_all = nn.MSELoss()
-
-    # 재학습
-    print("전체 데이터로 모델 재학습 중...")
-    train_model(
-        model_all, all_loader, all_loader, base_criterion_all, optimizer_all, scheduler_all,
-        args.epochs, args.alpha, args.beta, device
-    )
-
-    # 오늘 날짜 기준 1년(365일) 예측
-    print("1년 장기 예측 수행 중...")
+    # 16. 56일 예측용 모델 추가 학습 및 예측
+    print("\n[추가 기능] 56일 예측용 모델 학습 및 예측 시작...")
+    
     try:
-        future_price_series_long, future_dates_long, price_future_long = predict_long_future(
-            model_all, all_df, scaler, static_feat_idx, args.window, 365, args.horizon, price_col, target_col
+        # 56일 예측용 데이터셋 생성 (기존 train/test 데이터 재활용)
+        print("56일 예측용 데이터셋 생성 중...")
+        train_dataset_56 = MultiStepTimeSeriesDataset(X_train, y_train, args.window, 56, args.step, static_feat_idx)
+        test_dataset_56 = MultiStepTimeSeriesDataset(X_test, y_test, args.window, 56, args.step, static_feat_idx)
+        
+        train_loader_56 = torch.utils.data.DataLoader(train_dataset_56, batch_size=args.batch_size, shuffle=True)
+        test_loader_56 = torch.utils.data.DataLoader(test_dataset_56, batch_size=args.test_batch_size, shuffle=False)
+        
+        print(f"56일 예측용 훈련 데이터셋 크기: {len(train_dataset_56)}")
+        print(f"56일 예측용 테스트 데이터셋 크기: {len(test_dataset_56)}")
+
+        # 56일 예측용 모델 생성 (target_size=56)
+        model_56 = AttentionLSTMModel(
+            input_size=input_size,
+            hidden_size=args.hidden_size,
+            num_layers=args.num_layers,
+            target_size=56,  # 56일 한 번에 예측
+            dropout=args.dropout,
+            static_feat_dim=static_feat_dim
+        ).to(device)
+        
+        print(f"56일 예측 모델 파라미터 수: {sum(p.numel() for p in model_56.parameters()):,}")
+        
+        # 56일 예측 모델 학습 설정
+        optimizer_56 = torch.optim.Adam(model_56.parameters(), lr=args.lr)
+        scheduler_56 = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_56, mode='min', factor=0.3, patience=10)
+        base_criterion_56 = nn.MSELoss()
+
+        # 56일 예측 모델 학습 (기존과 동일한 방식)
+        print("56일 예측용 모델 학습 중...")
+        train_losses_56, test_losses_56 = train_model(
+            model_56, train_loader_56, test_loader_56, base_criterion_56, 
+            optimizer_56, scheduler_56, args.epochs, args.alpha, args.beta, device
         )
+        
+        # 56일 예측 학습 곡선 시각화
+        if not args.no_plot:
+            plot_loss(train_losses_56, test_losses_56)
 
-        # 예측 결과를 올바른 날짜 인덱스로 설정
-        start_date = all_df.index[-1] + pd.Timedelta(days=1)
-        future_price_series_long.index = pd.date_range(start=start_date, periods=len(future_price_series_long), freq='D')
+        # 56일 테스트 구간 예측 (기존과 동일한 슬라이딩 윈도우 방식)
+        print("56일 테스트 구간 예측 중...")
+        forecast_all_56, predictions_56 = predict_and_inverse(
+            model_56, test_loader_56, scaler, train_df, test_df, df, target_col, 
+            price_col, args.window, 56, args.step, static_feat_idx
+        )
+        
+        # 56일 테스트 구간 결과 시각화
+        if not args.no_plot:
+            plot_prediction(df, forecast_all_56, start=pd.to_datetime('2023-07-01'), end=pd.to_datetime('2025-04-01'))
 
-        # 1년 예측 결과를 별도 파일로 저장 (실제 가격 포함)
-        print("1년 예측 결과 저장 중...")
+        # 56일 미래 구간 예측
+        print("56일 미래 구간 예측 중...")
+        future_price_series_56, future_dates_56, price_future_56 = predict_future(
+            model_56, test_df, train_df, scaler, static_feat_idx, args.window, 
+            56, price_col, target_col
+        )
         
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        app_dir = os.path.abspath(os.path.join(current_dir, '../../../'))
-        output_dir = os.path.join(app_dir, 'data', 'output')
+        # 56일 전체 결과 시각화 (테스트 + 미래)
+        if not args.no_plot:
+            plot_prediction(
+                df, forecast_all_56, 
+                start=pd.to_datetime('2023-07-01'), 
+                end=future_price_series_56.index[-1], 
+                future_series=future_price_series_56
+            )
+
+        # 56일 예측 결과 평가 및 저장 (기존과 동일한 방식, 다른 파일명)
+        print("56일 예측 결과 평가 및 저장 중...")
+        evaluate_and_save(df, forecast_all_56, predictions_56, price_col, future_dates_56, price_future_56, 
+                         data_path="../data/output/prediction_result_56days.csv")
         
-        # 출력 디렉토리가 없으면 생성
-        os.makedirs(output_dir, exist_ok=True)
+        print("[추가 기능] 56일 예측용 모델 학습 및 예측 완료!")
         
-        # 1년 예측 결과 DataFrame 생성
-        future_df_1year = pd.DataFrame({
-            "Date": future_price_series_long.index,
-            "Predicted_Price": future_price_series_long.values,
-            "Actual_Price": [None] * len(future_price_series_long)
-        })
+        # # coffee_price_fetcher 모듈 import
+        # current_dir = os.path.dirname(os.path.abspath(__file__))
+        # app_dir = os.path.abspath(os.path.join(current_dir, '../../../'))
+        # output_dir = os.path.join(app_dir, 'data', 'output')
         
-        # 실제 커피 가격 추가
-        if enhance_predictions_with_actual_prices is not None:
-            try:
-                future_df_1year = enhance_predictions_with_actual_prices(future_df_1year)
-            except Exception as e:
-                print(f"⚠️ 실제 가격 추가 중 오류 발생: {e}")
-                print("예측값만 저장합니다.")
+        # # 출력 디렉토리가 없으면 생성
+        # os.makedirs(output_dir, exist_ok=True)
         
-        # 파일 저장
-        future_1year_path = os.path.join(output_dir, 'prediction_result_future_1year.csv')
-        future_df_1year.to_csv(future_1year_path, index=False)
-        print(f"1년 예측 결과가 {future_1year_path}에 저장되었습니다.")
+        # # 추가로 미래 예측만 별도 저장
+        # future_df_56days = pd.DataFrame({
+        #     "Date": future_price_series_56.index,
+        #     "Predicted_Price": future_price_series_56.values,
+        #     "Actual_Price": [None] * len(future_price_series_56)
+        # })
         
-        # 실제 가격이 추가된 날짜 수 출력
-        actual_price_count = future_df_1year['Actual_Price'].notna().sum()
-        total_predictions = len(future_df_1year)
-        print(f"📊 총 {total_predictions}개 예측 중 {actual_price_count}개 날짜에 실제 가격 포함")
+        # # 실제 커피 가격 추가
+        # if enhance_predictions_with_actual_prices is not None:
+        #     try:
+        #         future_df_56days = enhance_predictions_with_actual_prices(future_df_56days)
+        #     except Exception as e:
+        #         print(f"실제 가격 추가 중 오류 발생: {e}")
+        #         print("예측값만 저장합니다.")
         
-        print("[추가 기능] 전체 데이터 재학습 및 1년 예측/저장 완료!")
+        # # 미래 예측만 별도 파일로 저장
+        # future_56days_path = os.path.join(output_dir, 'prediction_result_future_56days.csv')
+        # future_df_56days.to_csv(future_56days_path, index=False)
+        # print(f"56일 미래 예측 결과가 {future_56days_path}에 저장되었습니다.")
+        
+        # # 실제 가격이 추가된 날짜 수 출력
+        # actual_price_count = future_df_56days['Actual_Price'].notna().sum()
+        # total_predictions = len(future_df_56days)
+        # print(f"총 {total_predictions}개 예측 중 {actual_price_count}개 날짜에 실제 가격 포함")
+        
+        # print("[추가 기능] 56일 예측용 모델 학습 및 예측 완료!")
         
     except Exception as e:
-        print(f"장기 예측 중 오류 발생: {e}")
-        print("단기 예측 결과는 정상적으로 저장되었습니다.")
+        print(f"56일 예측 중 오류 발생: {e}")
+        print("기본 14일 예측 결과는 정상적으로 저장되었습니다.")
         import traceback
         traceback.print_exc()
 
