@@ -251,47 +251,110 @@ def evaluate_and_save(df, forecast_all, predictions, price_col, future_dates, pr
     
     Args:
         df (pd.DataFrame): 원본 데이터프레임
-        forecast_all (pd.Series): 테스트 구간 예측값
+        forecast_all (pd.Series): 테스트 구간 예측값 (또는 미래 예측값)
         predictions (list): 개별 예측 시리즈 리스트
         price_col (str): 가격 컬럼명
         future_dates (pd.DatetimeIndex): 미래 예측 날짜
         price_future (list): 미래 예측 가격 리스트
         data_path (str, optional): 저장할 파일 경로. None이면 기본 경로 사용.
     """
-    # 성능 평가
-    actual = df.loc[forecast_all.index, price_col]
-    predicted = forecast_all
-    rmse = np.sqrt(mean_squared_error(actual, predicted))
-    mae = mean_absolute_error(actual, predicted)
+    # 예측 날짜가 원본 데이터에 있는지 확인
+    has_actual_data = forecast_all.index.isin(df.index).any()
     
-    print(f"=== 모델 성능 평가 ===")
-    print(f"RMSE: {rmse:.4f}")
-    print(f"MAE:  {mae:.4f}")
+    if has_actual_data:
+        # 테스트 구간 예측의 경우 - 성능 평가 수행
+        # 실제로 존재하는 날짜만 필터링
+        valid_dates = forecast_all.index.intersection(df.index)
+        if len(valid_dates) > 0:
+            actual = df.loc[valid_dates, price_col]
+            predicted = forecast_all.loc[valid_dates]
+            rmse = np.sqrt(mean_squared_error(actual, predicted))
+            mae = mean_absolute_error(actual, predicted)
+            
+            print(f"=== 모델 성능 평가 ===")
+            print(f"RMSE: {rmse:.4f}")
+            print(f"MAE:  {mae:.4f}")
+        else:
+            print("=== 성능 평가를 위한 유효한 데이터가 없습니다 ===")
+    else:
+        # 미래 예측의 경우 - 성능 평가 건너뛰기
+        print("=== 미래 예측 결과 (성능 평가 불가) ===")
+        print(f"예측 기간: {forecast_all.index[0]} ~ {forecast_all.index[-1]}")
+        print(f"예측 데이터 포인트 수: {len(forecast_all)}")
     
     # 결과 데이터프레임 생성
-    pred_series = pd.concat(predictions).sort_index()
-    true_series = pd.Series(df[price_col], index=pred_series.index)
+    if len(predictions) > 0 and isinstance(predictions[0], pd.Series):
+        # 테스트 구간 예측의 경우
+        pred_series = pd.concat(predictions, axis=1).mean(axis=1) if len(predictions) > 1 else predictions[0]
+        
+        # 실제값이 있는 경우에만 포함
+        if has_actual_data:
+            valid_dates = pred_series.index.intersection(df.index)
+            true_series = df.loc[valid_dates, price_col] if len(valid_dates) > 0 else pd.Series()
+            
+            result_df = pd.DataFrame({
+                "Date": pred_series.index, 
+                "Predicted_Price": pred_series.values, 
+                "Actual_Price": [true_series.get(date, None) for date in pred_series.index]
+            })
+        else:
+            # 미래 예측의 경우
+            result_df = pd.DataFrame({
+                "Date": pred_series.index, 
+                "Predicted_Price": pred_series.values, 
+                "Actual_Price": [None] * len(pred_series)
+            })
+    else:
+        # predictions가 미래 예측 시리즈인 경우
+        result_df = pd.DataFrame({
+            "Date": forecast_all.index, 
+            "Predicted_Price": forecast_all.values, 
+            "Actual_Price": [None] * len(forecast_all)
+        })
     
-    # 테스트 구간 결과
-    result_df = pd.DataFrame({
-        "Date": pred_series.index, 
-        "Predicted_Price": pred_series.values, 
-        "Actual_Price": true_series.values
-    })
     result_df["Date"] = pd.to_datetime(result_df["Date"])
     result_df = result_df.sort_values("Date").reset_index(drop=True)
     
-    # 미래 구간 결과
-    future_df = pd.DataFrame({
-        "Date": future_dates, 
-        "Predicted_Price": price_future, 
-        "Actual_Price": [None] * len(price_future)
-    })
+    # 최종 결과 DataFrame 초기화
+    X_all = result_df.copy()
     
-    # 전체 결과 결합 및 저장
-    X_all = pd.concat([
-        pd.DataFrame(result_df, columns=["Date", "Predicted_Price", "Actual_Price"]),
-        pd.DataFrame(future_df, columns=["Date", "Predicted_Price", "Actual_Price"])
-    ], axis=0)
-    X_all.drop_duplicates(subset=["Date"], inplace=True)
-    save_result(X_all, data_path) 
+    # 미래 구간이 별도로 제공된 경우 추가
+    if future_dates is not None and len(future_dates) > 0 and price_future is not None and len(price_future) > 0:
+        future_df = pd.DataFrame({
+            "Date": future_dates, 
+            "Predicted_Price": price_future, 
+            "Actual_Price": [None] * len(price_future)
+        })
+        
+        # 두 DataFrame이 모두 비어있지 않은 경우에만 concat 수행
+        if not result_df.empty and not future_df.empty:
+            # 각 DataFrame의 컬럼 타입 확인 및 통일
+            result_df_copy = result_df.copy()
+            future_df_copy = future_df.copy()
+            
+            # Date 컬럼을 datetime으로 통일
+            result_df_copy["Date"] = pd.to_datetime(result_df_copy["Date"])
+            future_df_copy["Date"] = pd.to_datetime(future_df_copy["Date"])
+            
+            # Actual_Price 컬럼 타입 통일 (object로)
+            result_df_copy["Actual_Price"] = result_df_copy["Actual_Price"].astype(object)
+            future_df_copy["Actual_Price"] = future_df_copy["Actual_Price"].astype(object)
+            
+            # 안전한 concat 수행
+            try:
+                X_all = pd.concat([result_df_copy, future_df_copy], axis=0, ignore_index=True)
+            except Exception as e:
+                print(f"DataFrame 결합 중 오류 발생: {e}")
+                print("기본 결과만 저장합니다.")
+                X_all = result_df.copy()
+        elif not future_df.empty:
+            # result_df가 비어있고 future_df만 있는 경우
+            X_all = future_df.copy()
+        # result_df만 있는 경우는 이미 X_all = result_df.copy()로 처리됨
+    
+    # 중복 제거 및 정렬
+    if not X_all.empty:
+        X_all.drop_duplicates(subset=["Date"], inplace=True)
+        X_all = X_all.sort_values("Date").reset_index(drop=True)
+    
+    save_result(X_all, data_path)

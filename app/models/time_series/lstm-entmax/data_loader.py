@@ -58,9 +58,36 @@ def save_result(result_df, data_path=None):
         data_path (str, optional): 저장할 파일 경로. None이면 기본 경로 사용.
     """
     if data_path is None:
+        # 기본 경로 설정
         current_dir = os.path.dirname(os.path.abspath(__file__))
         app_dir = os.path.abspath(os.path.join(current_dir, '../../../'))
-        data_path = os.path.join(app_dir, 'data', 'output', 'prediction_result.csv')
+        output_dir = os.path.join(app_dir, 'data', 'output')
+        data_path = os.path.join(output_dir, 'prediction_result.csv')
+    else:
+        # 상대 경로인 경우 절대 경로로 변환
+        if not os.path.isabs(data_path):
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            if data_path.startswith('../'):
+                # 상대 경로 처리
+                app_dir = os.path.abspath(os.path.join(current_dir, '../../../'))
+                data_path = os.path.join(app_dir, data_path.replace('../', ''))
+            else:
+                data_path = os.path.join(current_dir, data_path)
     
-    result_df.to_csv(data_path, index=False)
-    print(f"예측 결과가 {data_path}에 저장되었습니다.") 
+    # 출력 디렉토리가 없으면 생성
+    output_dir = os.path.dirname(data_path)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    try:
+        result_df.to_csv(data_path, index=False)
+        print(f"예측 결과가 {data_path}에 저장되었습니다.")
+    except Exception as e:
+        print(f"파일 저장 중 오류 발생: {e}")
+        # 현재 디렉토리에 백업 저장 시도
+        backup_filename = f"prediction_result_backup_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        backup_path = os.path.join(os.getcwd(), backup_filename)
+        try:
+            result_df.to_csv(backup_path, index=False)
+            print(f"백업 파일이 {backup_path}에 저장되었습니다.")
+        except Exception as backup_error:
+            print(f"백업 저장도 실패했습니다: {backup_error}")

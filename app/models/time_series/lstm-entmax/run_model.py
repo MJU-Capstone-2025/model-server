@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import argparse
 import numpy as np
+import os
 
 # 로컬 모듈 import (절대 import로 변경)
 try:
@@ -21,6 +22,7 @@ try:
     from .visualizer import plot_loss, plot_prediction
     from .data_loader import save_result
     from .trainer import predict_long_future
+    from .coffee_price_fetcher import enhance_predictions_with_actual_prices
 except ImportError:
     # 직접 실행될 때
     from utils import get_device
@@ -31,6 +33,7 @@ except ImportError:
     from visualizer import plot_loss, plot_prediction
     from data_loader import save_result
     from trainer import predict_long_future
+    from coffee_price_fetcher import enhance_predictions_with_actual_prices
 
 
 def parse_arguments():
@@ -275,32 +278,58 @@ def main():
     )
 
     # 오늘 날짜 기준 1년(365일) 예측
-    from datetime import datetime, timedelta
-    today = pd.to_datetime(datetime.today().date())
-    # all_df의 마지막 구간을 기준으로 예측
-    future_price_series, future_dates, price_future = predict_long_future(
-        model_all, all_df, scaler, static_feat_idx, args.window, 365, args.horizon, price_col, target_col
-    )
+    print("1년 장기 예측 수행 중...")
+    try:
+        future_price_series_long, future_dates_long, price_future_long = predict_long_future(
+            model_all, all_df, scaler, static_feat_idx, args.window, 365, args.horizon, price_col, target_col
+        )
 
-    # 예측 결과 저장
-    future_price_series.index = pd.date_range(start=df.index[-1] + pd.Timedelta(days=1), periods=365, freq='D')
+        # 예측 결과를 올바른 날짜 인덱스로 설정
+        start_date = all_df.index[-1] + pd.Timedelta(days=1)
+        future_price_series_long.index = pd.date_range(start=start_date, periods=len(future_price_series_long), freq='D')
 
-    # 예측 결과 평가 및 저장
-    evaluate_and_save(
-        all_df, future_price_series, [future_price_series], price_col, future_dates, price_future,
-        data_path=None  # 아래에서 파일명 지정
-    )
-    # prediction_result_future.csv로 저장
-    
-    save_result(
-        pd.DataFrame({
-            "Date": future_price_series.index,
-            "Predicted_Price": future_price_series.values,
-            "Actual_Price": [None]*len(future_price_series)
-        }),
-        data_path="../data/output/prediction_result_future.csv"
-    )
-    print("[추가 기능] 전체 데이터 재학습 및 1년 예측/저장 완료!")
+        # 1년 예측 결과를 별도 파일로 저장 (실제 가격 포함)
+        print("1년 예측 결과 저장 중...")
+        
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        app_dir = os.path.abspath(os.path.join(current_dir, '../../../'))
+        output_dir = os.path.join(app_dir, 'data', 'output')
+        
+        # 출력 디렉토리가 없으면 생성
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # 1년 예측 결과 DataFrame 생성
+        future_df_1year = pd.DataFrame({
+            "Date": future_price_series_long.index,
+            "Predicted_Price": future_price_series_long.values,
+            "Actual_Price": [None] * len(future_price_series_long)
+        })
+        
+        # 실제 커피 가격 추가
+        if enhance_predictions_with_actual_prices is not None:
+            try:
+                future_df_1year = enhance_predictions_with_actual_prices(future_df_1year)
+            except Exception as e:
+                print(f"⚠️ 실제 가격 추가 중 오류 발생: {e}")
+                print("예측값만 저장합니다.")
+        
+        # 파일 저장
+        future_1year_path = os.path.join(output_dir, 'prediction_result_future_1year.csv')
+        future_df_1year.to_csv(future_1year_path, index=False)
+        print(f"1년 예측 결과가 {future_1year_path}에 저장되었습니다.")
+        
+        # 실제 가격이 추가된 날짜 수 출력
+        actual_price_count = future_df_1year['Actual_Price'].notna().sum()
+        total_predictions = len(future_df_1year)
+        print(f"📊 총 {total_predictions}개 예측 중 {actual_price_count}개 날짜에 실제 가격 포함")
+        
+        print("[추가 기능] 전체 데이터 재학습 및 1년 예측/저장 완료!")
+        
+    except Exception as e:
+        print(f"장기 예측 중 오류 발생: {e}")
+        print("단기 예측 결과는 정상적으로 저장되었습니다.")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

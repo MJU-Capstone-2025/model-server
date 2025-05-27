@@ -6,6 +6,10 @@ __pycache__
 
 # files
 .env
+temp.md
+temp.py
+temp.ipynb
+temp.txt
 
 # Python
 *.pyc
