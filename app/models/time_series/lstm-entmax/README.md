@@ -1,235 +1,80 @@
-# Coffee Price Prediction using LSTM with Entmax Attention
+# LSTM-Entmax 커피 가격 예측 모델
 
-## 개요
+## 모델 설명
 
-Entmax 어텐션 메커니즘을 활용한 LSTM 기반 커피 가격 예측 모델. 경제적 지표(원유 가격, 환율)와 기상 데이터를 결합하여 다중 스텝 커피 가격 예측을 수행.
+이 모델은 **LSTM(Long Short-Term Memory)** 기반의 시계열 예측 모델에 **Entmax 어텐션** 메커니즘을 결합하여 커피 가격을 예측한다.
 
-## 설치 요구사항
+-   **LSTM**: 시계열 데이터의 장기 의존성을 효과적으로 학습하는 순환 신경망(RNN) 구조.
+-   **Entmax 어텐션**: 소프트맥스(softmax) 대신 **Entmax**(특히 Entmax15)를 사용한 어텐션 메커니즘으로, 희소(sparse)한 어텐션 분포를 만들어 해석력과 성능을 높임.
+-   **정적 피처 결합**: 시계열 입력 외에도 경제/기후 등 정적 피처를 함께 입력받아 예측 성능을 향상.
+-   **커스텀 손실 함수**: 방향성 손실, 분산 손실 등 시계열 예측에 특화된 손실 함수를 추가로 사용.
 
-```bash
-pip install torch torchvision
-pip install pandas numpy scikit-learn matplotlib
-pip install entmax
-```
+모델 예측 과정은 다음과 같다:
 
-## 실행 방법
+1. **데이터 분할**: 전체 데이터셋을 80%는 학습용, 20%는 테스트용으로 나눈다.
+2. **테스트 기간 예측(`predict_and_inverse`)**: 이 함수는 테스트 데이터에서 일정 구간(예: 100일)을 기준으로 모델이 향후 14일간의 커피 가격 수익률을 예측하고, 이를 실제 가격으로 복원한다.
+    - 예를 들어 2023년 5월 10일이 마지막 입력일이라면, 해당 시점의 실제 가격(예: 190.0)을 기준으로 수익률 예측값을 곱해 2023년 5월 11일부터 24일까지의 가격을 계산한다. 이렇게 얻은 예측 결과들을 반복 수집하여 평균을 내면, 전체 테스트 구간에 대한 안정된 커피 가격 예측 시계열이 생성된다.
+3. **테스트 데이터 셋 이후 14일 예측(`predict_future`)**: 이 함수는 테스트 데이터의 마지막 data_window 일간 시계열 데이터를 기반으로, 향후 future_target 일간의 커피 수익률을 한 번에 예측한다. 예측된 수익률은 역정규화를 거쳐 실제 커피 가격으로 변환되며, 가장 마지막 실제 가격을 기준으로 누적 계산된다.
 
-### 1. 기본 실행
+    - data_window = 100, future_target = 14, test_df의 마지막 날짜가 2023-04-09라고 가정
 
-```bash
-cd app
-python models/time_series/lstm-entmax/run_model.py
-```
+    - 2023-01-01 ~ 2023-04-09 중 마지막 100일 데이터를 입력으로 사용
 
-기본 설정으로 모델을 실행:
+    - 모델은 한 번의 예측으로 2023-04-10 ~ 2023-04-23의 수익률을 출력하고, 마지막 실제 가격(예: 192.0)을 기준으로 예측 수익률을 누적 곱하여 14일 예측 가격을 계산
 
--   윈도우 크기: 100
--   예측 구간: 14일
--   에폭 수: 5
--   배치 크기: 64
--   학습률: 0.001
+> **모델 확장**: 실시간 데이터 수집이 가능하다면, 오늘 기준 1년 전부터를 test set으로 설정하여 `predict_and_inverse`를 통해 예측 성능을 검증할 수 있다. 이후, 오늘 기준 14일 뒤의 커피 가격 흐름은 `predict_future`를 통해 예측 가능하며, 실제 시계열 예측 및 투자 판단에 활용할 수 있다.
 
-### 2. 사용자 정의 파라미터로 실행
+## 주요 파일 설명
 
-#### 데이터 관련 파라미터
+-   **models.py**  
+    LSTM + Entmax 어텐션 + 정적 피처 결합 모델 정의
 
-```bash
-# 윈도우 크기와 예측 구간 변경
-python models/time_series/lstm-entmax/run_model.py --window 50 --horizon 7
+    -   `EntmaxAttention`: Entmax 기반 어텐션 레이어
+    -   `AttentionLSTMModel`: 전체 모델 구조 (LSTM, 어텐션, 게이트, 정적 피처 결합)
 
-# 슬라이딩 윈도우 스텝 크기 변경
-python models/time_series/lstm-entmax/run_model.py --step 2
-```
+-   **losses.py**  
+    커스텀 손실 함수
 
-#### 모델 관련 파라미터
+    -   `directional_loss`: 예측값과 실제값의 변화 방향 일치 여부
+    -   `variance_loss`: 예측값과 실제값의 분산 차이
 
-```bash
-# LSTM 구조 변경
-python models/time_series/lstm-entmax/run_model.py --hidden_size 128 --num_layers 3 --dropout 0.2
+-   **trainer.py**  
+    모델 학습, 예측, 평가 함수
 
-# 더 큰 모델로 실행
-python models/time_series/lstm-entmax/run_model.py --hidden_size 256 --num_layers 4
-```
+    -   `train_model`: 복합 손실로 학습
+    -   `predict_and_inverse`, `predict_future`: 예측 및 역정규화
+    -   `evaluate_and_save`: 결과 평가 및 저장
 
-#### 학습 관련 파라미터
+-   **data_loader.py**  
+    경제/기후 데이터 로딩 및 예측 결과 저장 함수
 
-```bash
-# 에폭 수와 배치 크기 변경
-python models/time_series/lstm-entmax/run_model.py --epochs 10 --batch_size 32
+-   **preprocessor.py**  
+    데이터 전처리 및 피처 생성, 정규화, 분할 함수
 
-# 학습률 조정
-python models/time_series/lstm-entmax/run_model.py --lr 0.0001
+-   **dataset.py**  
+    PyTorch용 시계열+정적 피처 데이터셋 클래스
 
-# 손실 함수 가중치 조정
-python models/time_series/lstm-entmax/run_model.py --alpha 0.3 --beta 0.15
-```
+-   **coffee_price_fetcher.py**  
+    yfinance를 이용한 커피 선물 가격 수집, 예측 결과에 실제 가격 추가
 
-### 3. 고급 사용법
+-   **visualizer.py**  
+    학습 곡선, 예측 결과 등 시각화 함수
 
-#### 시각화 없이 실행 (서버 환경)
+-   **utils.py**  
+    장치 선택, 어텐션 엔트로피 계산 등 보조 함수
 
-```bash
-python models/time_series/lstm-entmax/run_model.py --no_plot
-```
+-   **run_model.py**  
+    전체 파이프라인 실행 메인 파일 (명령행 인자 기반 실행)
 
-#### CPU 강제 사용
+-   \***\*init**.py\*\*  
+    패키지 초기화 및 주요 함수/클래스 export
 
-```bash
-python models/time_series/lstm-entmax/run_model.py --device cpu
-```
+---
 
-#### 종합 예시
+## 참고
 
-```bash
-# 고성능 설정으로 실행
-python models/time_series/lstm-entmax/run_model.py --epochs 20 --window 200 --hidden_size 256 --num_layers 3 --batch_size 32 --lr 0.0005 --dropout 0.15
-```
+-   Entmax 어텐션 논문:  
+    _Peters, M. E., et al. "Sparse Sequence-to-Sequence Models." arXiv preprint arXiv:1905.05702 (2019)._
+-   yfinance, pandas, torch 등 주요 라이브러리 사용
 
-## 명령행 옵션
-
-### 데이터 관련
-
-| 옵션        | 타입 | 기본값 | 설명                                      |
-| ----------- | ---- | ------ | ----------------------------------------- |
-| `--window`  | int  | 100    | 입력 시퀀스 길이 (과거 몇 일 데이터 사용) |
-| `--horizon` | int  | 14     | 예측 구간 길이 (미래 몇 일 예측)          |
-| `--step`    | int  | 1      | 슬라이딩 윈도우 스텝 크기                 |
-
-### 모델 관련
-
-| 옵션            | 타입  | 기본값 | 설명                |
-| --------------- | ----- | ------ | ------------------- |
-| `--hidden_size` | int   | 64     | LSTM 은닉 상태 크기 |
-| `--num_layers`  | int   | 2      | LSTM 레이어 수      |
-| `--dropout`     | float | 0.1    | 드롭아웃 비율       |
-
-### 학습 관련
-
-| 옵션                | 타입  | 기본값 | 설명               |
-| ------------------- | ----- | ------ | ------------------ |
-| `--epochs`          | int   | 5      | 학습 에폭 수       |
-| `--batch_size`      | int   | 64     | 훈련 배치 크기     |
-| `--test_batch_size` | int   | 32     | 테스트 배치 크기   |
-| `--lr`              | float | 0.001  | 학습률             |
-| `--alpha`           | float | 0.2    | 방향성 손실 가중치 |
-| `--beta`            | float | 0.1    | 분산 손실 가중치   |
-
-### 기타
-
-| 옵션         | 타입 | 기본값 | 설명                        |
-| ------------ | ---- | ------ | --------------------------- |
-| `--no_plot`  | flag | False  | 시각화 생략                 |
-| `--device`   | str  | auto   | 사용할 장치 (auto/cpu/cuda) |
-| `--examples` | flag | False  | 사용 예시 출력 후 종료      |
-| `--help`     | flag | False  | 도움말 출력                 |
-
-## 사용 예시
-
-### 빠른 테스트
-
-```bash
-# 빠른 테스트 (작은 윈도우, 적은 에폭)
-python models/time_series/lstm-entmax/run_model.py --window 30 --epochs 2 --batch_size 32
-```
-
-### 정확도 중심 설정
-
-```bash
-# 높은 정확도를 위한 설정
-python models/time_series/lstm-entmax/run_model.py --epochs 15 --window 150 --hidden_size 128 --num_layers 3 --lr 0.0005
-```
-
-### 메모리 절약 설정
-
-```bash
-# 메모리가 부족한 환경
-python models/time_series/lstm-entmax/run_model.py --batch_size 16 --test_batch_size 8 --hidden_size 32 --device cpu
-```
-
-### 실험적 설정
-
-```bash
-# 다양한 손실 함수 가중치 실험
-python models/time_series/lstm-entmax/run_model.py --alpha 0.5 --beta 0.2 --epochs 10
-```
-
-## 출력 결과
-
-실행 시 다음과 같은 결과를 얻을 수 있다:
-
-1. **콘솔 출력**: 학습 진행 상황, 성능 지표 (RMSE, MAE)
-2. **시각화**: 학습 곡선, 예측 결과 그래프 (--no_plot 옵션 사용 시 생략)
-3. **CSV 파일**: `app/data/output/prediction_result.csv`에 예측 결과 저장
-
-## 도움말 및 예시
-
-```bash
-# 전체 옵션 확인
-python models/time_series/lstm-entmax/run_model.py --help
-
-# 사용 예시 확인
-python models/time_series/lstm-entmax/run_model.py --examples
-```
-
-## 파일 구조
-
-```
-lstm-entmax/
-├── run_model.py          # 메인 실행 파일
-├── utils.py              # 유틸리티 함수
-├── data_loader.py        # 데이터 로딩
-├── preprocessor.py       # 데이터 전처리
-├── dataset.py            # 데이터셋 클래스
-├── models.py             # 모델 정의
-├── losses.py             # 손실 함수
-├── visualizer.py         # 시각화
-├── trainer.py            # 학습 및 예측
-└── README.md             # 이 파일
-```
-
-## 문제 해결
-
-### 메모리 부족 오류
-
-```bash
-# 배치 크기 줄이기
-python models/time_series/lstm-entmax/run_model.py --batch_size 16 --test_batch_size 8
-
-# CPU 사용
-python models/time_series/lstm-entmax/run_model.py --device cpu
-```
-
-### CUDA 오류
-
-```bash
-# CPU 강제 사용
-python models/time_series/lstm-entmax/run_model.py --device cpu
-```
-
-### 시각화 오류 (서버 환경)
-
-```bash
-# 시각화 비활성화
-python models/time_series/lstm-entmax/run_model.py --no_plot
-```
-
-## 성능 튜닝 가이드
-
-### 정확도 향상
-
-1. **윈도우 크기 증가**: `--window 200`
-2. **모델 크기 증가**: `--hidden_size 128 --num_layers 3`
-3. **에폭 수 증가**: `--epochs 15`
-4. **학습률 조정**: `--lr 0.0005`
-
-### 학습 속도 향상
-
-1. **배치 크기 증가**: `--batch_size 128`
-2. **윈도우 크기 감소**: `--window 50`
-3. **모델 크기 감소**: `--hidden_size 32 --num_layers 1`
-
-### 메모리 사용량 감소
-
-1. **배치 크기 감소**: `--batch_size 16`
-2. **모델 크기 감소**: `--hidden_size 32`
-3. **CPU 사용**: `--device cpu`
+---
