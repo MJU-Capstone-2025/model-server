@@ -57,7 +57,10 @@ async def get_news():
         df_all[date_col] = pd.to_datetime(df_all[date_col], errors='coerce').dt.strftime('%Y-%m-%d')
         df_all = df_all.sort_values(by=date_col, ascending=False).reset_index(drop=True)
         df_all = df_all.replace({np.nan: None})
-        latest_5 = df_all.head(5)
-        return create_success_response(data=latest_5.to_dict(orient="records"))
+        # predicted_price_direction이 neutral이 아닌 것만 필터링
+        if 'predicted_price_direction' in df_all.columns:
+            df_all = df_all[df_all['predicted_price_direction'] != 'neutral']
+        latest = df_all.head(100)
+        return create_success_response(data=latest.to_dict(orient="records"))
     except Exception as e:
         return create_error_response(500, f"데이터 처리 오류: {str(e)}")
