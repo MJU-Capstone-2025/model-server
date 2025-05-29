@@ -10,6 +10,7 @@ import torch.nn as nn
 import argparse
 import numpy as np
 import os
+import traceback
 
 # 로컬 모듈 import (절대 import로 변경)
 try:
@@ -241,124 +242,168 @@ def main():
     evaluate_and_save(df, forecast_all, predictions, price_col, future_dates, price_future)
     
     print("=== 커피 가격 예측 모델 완료 ===")
-
-    # 16. 56일 예측용 모델 추가 학습 및 예측
-    print("\n[추가 기능] 56일 예측용 모델 학습 및 예측 시작...")
+    
+        # 16. 7일 예측용 모델 추가 학습 및 예측
+    print("\n7일 예측용 모델 학습 및 예측 시작...")
     
     try:
-        # 56일 예측용 데이터셋 생성 (기존 train/test 데이터 재활용)
-        print("56일 예측용 데이터셋 생성 중...")
-        train_dataset_56 = MultiStepTimeSeriesDataset(X_train, y_train, args.window, 56, args.step, static_feat_idx)
-        test_dataset_56 = MultiStepTimeSeriesDataset(X_test, y_test, args.window, 56, args.step, static_feat_idx)
+        # 7일 예측용 데이터셋 생성 (기존 train/test 데이터 재활용)
+        print("7일 예측용 데이터셋 생성 중...")
+        train_dataset_7 = MultiStepTimeSeriesDataset(X_train, y_train, args.window, 7, args.step, static_feat_idx)
+        test_dataset_7 = MultiStepTimeSeriesDataset(X_test, y_test, args.window, 7, args.step, static_feat_idx)
         
-        train_loader_56 = torch.utils.data.DataLoader(train_dataset_56, batch_size=args.batch_size, shuffle=True)
-        test_loader_56 = torch.utils.data.DataLoader(test_dataset_56, batch_size=args.test_batch_size, shuffle=False)
+        train_loader_7 = torch.utils.data.DataLoader(train_dataset_7, batch_size=args.batch_size, shuffle=True)
+        test_loader_7 = torch.utils.data.DataLoader(test_dataset_7, batch_size=args.test_batch_size, shuffle=False)
         
-        print(f"56일 예측용 훈련 데이터셋 크기: {len(train_dataset_56)}")
-        print(f"56일 예측용 테스트 데이터셋 크기: {len(test_dataset_56)}")
+        print(f"7일 예측용 훈련 데이터셋 크기: {len(train_dataset_7)}")
+        print(f"7일 예측용 테스트 데이터셋 크기: {len(test_dataset_7)}")
 
-        # 56일 예측용 모델 생성 (target_size=56)
-        model_56 = AttentionLSTMModel(
+        # 7일 예측용 모델 생성 (target_size=7)
+        model_7 = AttentionLSTMModel(
             input_size=input_size,
             hidden_size=args.hidden_size,
             num_layers=args.num_layers,
-            target_size=56,  # 56일 한 번에 예측
+            target_size=7,  # 7일 한 번에 예측
             dropout=args.dropout,
             static_feat_dim=static_feat_dim
         ).to(device)
         
-        print(f"56일 예측 모델 파라미터 수: {sum(p.numel() for p in model_56.parameters()):,}")
+        print(f"7일 예측 모델 파라미터 수: {sum(p.numel() for p in model_7.parameters()):,}")
         
-        # 56일 예측 모델 학습 설정
-        optimizer_56 = torch.optim.Adam(model_56.parameters(), lr=args.lr)
-        scheduler_56 = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_56, mode='min', factor=0.3, patience=10)
-        base_criterion_56 = nn.MSELoss()
+        # 7일 예측 모델 학습 설정
+        optimizer_7 = torch.optim.Adam(model_7.parameters(), lr=args.lr)
+        scheduler_7 = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_7, mode='min', factor=0.3, patience=10)
+        base_criterion_7 = nn.MSELoss()
 
-        # 56일 예측 모델 학습 (기존과 동일한 방식)
-        print("56일 예측용 모델 학습 중...")
-        train_losses_56, test_losses_56 = train_model(
-            model_56, train_loader_56, test_loader_56, base_criterion_56, 
-            optimizer_56, scheduler_56, args.epochs, args.alpha, args.beta, device
+        # 7일 예측 모델 학습 (기존과 동일한 방식)
+        print("7일 예측용 모델 학습 중...")
+        train_losses_7, test_losses_7 = train_model(
+            model_7, train_loader_7, test_loader_7, base_criterion_7, 
+            optimizer_7, scheduler_7, args.epochs, args.alpha, args.beta, device
         )
         
-        # 56일 예측 학습 곡선 시각화
+        # 7일 예측 학습 곡선 시각화
         if not args.no_plot:
-            plot_loss(train_losses_56, test_losses_56)
+            plot_loss(train_losses_7, test_losses_7)
 
-        # 56일 테스트 구간 예측 (기존과 동일한 슬라이딩 윈도우 방식)
-        print("56일 테스트 구간 예측 중...")
-        forecast_all_56, predictions_56 = predict_and_inverse(
-            model_56, test_loader_56, scaler, train_df, test_df, df, target_col, 
-            price_col, args.window, 56, args.step, static_feat_idx
+        # 7일 테스트 구간 예측 (기존과 동일한 슬라이딩 윈도우 방식)
+        print("7일 테스트 구간 예측 중...")
+        forecast_all_7, predictions_7 = predict_and_inverse(
+            model_7, test_loader_7, scaler, train_df, test_df, df, target_col, 
+            price_col, args.window, 7, args.step, static_feat_idx
         )
         
-        # 56일 테스트 구간 결과 시각화
+        # 7일 테스트 구간 결과 시각화
         if not args.no_plot:
-            plot_prediction(df, forecast_all_56, start=pd.to_datetime('2023-07-01'), end=pd.to_datetime('2025-04-01'))
+            plot_prediction(df, forecast_all_7, start=pd.to_datetime('2023-07-01'), end=pd.to_datetime('2025-04-01'))
 
-        # 56일 미래 구간 예측
-        print("56일 미래 구간 예측 중...")
-        future_price_series_56, future_dates_56, price_future_56 = predict_future(
-            model_56, test_df, train_df, scaler, static_feat_idx, args.window, 
-            56, price_col, target_col
+        # 7일 미래 구간 예측
+        print("7일 미래 구간 예측 중...")
+        future_price_series_7, future_dates_7, price_future_7 = predict_future(
+            model_7, test_df, train_df, scaler, static_feat_idx, args.window, 
+            7, price_col, target_col
         )
         
-        # 56일 전체 결과 시각화 (테스트 + 미래)
+        # 7일 전체 결과 시각화 (테스트 + 미래)
         if not args.no_plot:
             plot_prediction(
-                df, forecast_all_56, 
+                df, forecast_all_7, 
                 start=pd.to_datetime('2023-07-01'), 
-                end=future_price_series_56.index[-1], 
-                future_series=future_price_series_56
+                end=future_price_series_7.index[-1], 
+                future_series=future_price_series_7
             )
 
-        # 56일 예측 결과 평가 및 저장 (기존과 동일한 방식, 다른 파일명)
-        print("56일 예측 결과 평가 및 저장 중...")
-        evaluate_and_save(df, forecast_all_56, predictions_56, price_col, future_dates_56, price_future_56, 
-                         data_path="../data/output/prediction_result_56days.csv")
+        # 7일 예측 결과 평가 및 저장 (기존과 동일한 방식, 다른 파일명)
+        print("7일 예측 결과 평가 및 저장 중...")
+        evaluate_and_save(df, forecast_all_7, predictions_7, price_col, future_dates_7, price_future_7, 
+                         data_path="../data/output/prediction_result_7days.csv")
         
-        print("[추가 기능] 56일 예측용 모델 학습 및 예측 완료!")
-        
-        # # coffee_price_fetcher 모듈 import
-        # current_dir = os.path.dirname(os.path.abspath(__file__))
-        # app_dir = os.path.abspath(os.path.join(current_dir, '../../../'))
-        # output_dir = os.path.join(app_dir, 'data', 'output')
-        
-        # # 출력 디렉토리가 없으면 생성
-        # os.makedirs(output_dir, exist_ok=True)
-        
-        # # 추가로 미래 예측만 별도 저장
-        # future_df_56days = pd.DataFrame({
-        #     "Date": future_price_series_56.index,
-        #     "Predicted_Price": future_price_series_56.values,
-        #     "Actual_Price": [None] * len(future_price_series_56)
-        # })
-        
-        # # 실제 커피 가격 추가
-        # if enhance_predictions_with_actual_prices is not None:
-        #     try:
-        #         future_df_56days = enhance_predictions_with_actual_prices(future_df_56days)
-        #     except Exception as e:
-        #         print(f"실제 가격 추가 중 오류 발생: {e}")
-        #         print("예측값만 저장합니다.")
-        
-        # # 미래 예측만 별도 파일로 저장
-        # future_56days_path = os.path.join(output_dir, 'prediction_result_future_56days.csv')
-        # future_df_56days.to_csv(future_56days_path, index=False)
-        # print(f"56일 미래 예측 결과가 {future_56days_path}에 저장되었습니다.")
-        
-        # # 실제 가격이 추가된 날짜 수 출력
-        # actual_price_count = future_df_56days['Actual_Price'].notna().sum()
-        # total_predictions = len(future_df_56days)
-        # print(f"총 {total_predictions}개 예측 중 {actual_price_count}개 날짜에 실제 가격 포함")
-        
-        # print("[추가 기능] 56일 예측용 모델 학습 및 예측 완료!")
-        
+        print("7일 예측용 모델 학습 및 예측 완료!")
+
     except Exception as e:
-        print(f"56일 예측 중 오류 발생: {e}")
-        print("기본 14일 예측 결과는 정상적으로 저장되었습니다.")
-        import traceback
+        print(f"7일 예측 중 오류 발생: {e}")
         traceback.print_exc()
+
+    # # 17. 56일 예측용 모델 추가 학습 및 예측
+    # print("\n[추가 기능] 56일 예측용 모델 학습 및 예측 시작...")
+    
+    # try:
+    #     # 56일 예측용 데이터셋 생성 (기존 train/test 데이터 재활용)
+    #     print("56일 예측용 데이터셋 생성 중...")
+    #     train_dataset_56 = MultiStepTimeSeriesDataset(X_train, y_train, args.window, 56, args.step, static_feat_idx)
+    #     test_dataset_56 = MultiStepTimeSeriesDataset(X_test, y_test, args.window, 56, args.step, static_feat_idx)
+        
+    #     train_loader_56 = torch.utils.data.DataLoader(train_dataset_56, batch_size=args.batch_size, shuffle=True)
+    #     test_loader_56 = torch.utils.data.DataLoader(test_dataset_56, batch_size=args.test_batch_size, shuffle=False)
+        
+    #     print(f"56일 예측용 훈련 데이터셋 크기: {len(train_dataset_56)}")
+    #     print(f"56일 예측용 테스트 데이터셋 크기: {len(test_dataset_56)}")
+
+    #     # 56일 예측용 모델 생성 (target_size=56)
+    #     model_56 = AttentionLSTMModel(
+    #         input_size=input_size,
+    #         hidden_size=args.hidden_size,
+    #         num_layers=args.num_layers,
+    #         target_size=56,  # 56일 한 번에 예측
+    #         dropout=args.dropout,
+    #         static_feat_dim=static_feat_dim
+    #     ).to(device)
+        
+    #     print(f"56일 예측 모델 파라미터 수: {sum(p.numel() for p in model_56.parameters()):,}")
+        
+    #     # 56일 예측 모델 학습 설정
+    #     optimizer_56 = torch.optim.Adam(model_56.parameters(), lr=args.lr)
+    #     scheduler_56 = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_56, mode='min', factor=0.3, patience=10)
+    #     base_criterion_56 = nn.MSELoss()
+
+    #     # 56일 예측 모델 학습 (기존과 동일한 방식)
+    #     print("56일 예측용 모델 학습 중...")
+    #     train_losses_56, test_losses_56 = train_model(
+    #         model_56, train_loader_56, test_loader_56, base_criterion_56, 
+    #         optimizer_56, scheduler_56, args.epochs, args.alpha, args.beta, device
+    #     )
+        
+    #     # 56일 예측 학습 곡선 시각화
+    #     if not args.no_plot:
+    #         plot_loss(train_losses_56, test_losses_56)
+
+    #     # 56일 테스트 구간 예측 (기존과 동일한 슬라이딩 윈도우 방식)
+    #     print("56일 테스트 구간 예측 중...")
+    #     forecast_all_56, predictions_56 = predict_and_inverse(
+    #         model_56, test_loader_56, scaler, train_df, test_df, df, target_col, 
+    #         price_col, args.window, 56, args.step, static_feat_idx
+    #     )
+        
+    #     # 56일 테스트 구간 결과 시각화
+    #     if not args.no_plot:
+    #         plot_prediction(df, forecast_all_56, start=pd.to_datetime('2023-07-01'), end=pd.to_datetime('2025-04-01'))
+
+    #     # 56일 미래 구간 예측
+    #     print("56일 미래 구간 예측 중...")
+    #     future_price_series_56, future_dates_56, price_future_56 = predict_future(
+    #         model_56, test_df, train_df, scaler, static_feat_idx, args.window, 
+    #         56, price_col, target_col
+    #     )
+        
+    #     # 56일 전체 결과 시각화 (테스트 + 미래)
+    #     if not args.no_plot:
+    #         plot_prediction(
+    #             df, forecast_all_56, 
+    #             start=pd.to_datetime('2023-07-01'), 
+    #             end=future_price_series_56.index[-1], 
+    #             future_series=future_price_series_56
+    #         )
+
+    #     # 56일 예측 결과 평가 및 저장 (기존과 동일한 방식, 다른 파일명)
+    #     print("56일 예측 결과 평가 및 저장 중...")
+    #     evaluate_and_save(df, forecast_all_56, predictions_56, price_col, future_dates_56, price_future_56, 
+    #                      data_path="../data/output/prediction_result_56days.csv")
+        
+    #     print("[추가 기능] 56일 예측용 모델 학습 및 예측 완료!")
+        
+    # except Exception as e:
+    #     print(f"56일 예측 중 오류 발생: {e}")
+    #     traceback.print_exc()
 
 
 if __name__ == "__main__":

@@ -96,8 +96,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DEV_CSV_PATH = "./data/output/prediction_result.csv"
-CSV_PATH = "./data/output/prediction_result_56days.csv"
+CSV_14DAYS_PATH = "./data/output/prediction_result.csv"
+CSV_7DAYS_PATH = "./data/output/prediction_result_7days.csv"
+# CSV_PATH = "./data/output/prediction_result_56days.csv"
 
 def create_error_response(status_code: int, message: str):
     """에러 응답을 생성하는 헬퍼 함수"""
@@ -128,46 +129,51 @@ def create_success_response(data=None, message="성공"):
 @app.get("/prediction-dev")
 async def get_predictions():
     # 파일 존재 여부 확인
-    if not os.path.exists(DEV_CSV_PATH):
+    if not os.path.exists(CSV_14DAYS_PATH):
         return create_error_response(404, "예측 결과 파일을 찾을 수 없습니다.")
-    
+    if not os.path.exists(CSV_7DAYS_PATH):
+        return create_error_response(404, "7일 예측 결과 파일을 찾을 수 없습니다.")
     try:
-        # API 응답을 위한 데이터 로드 및 전처리
-        df = pd.read_csv(DEV_CSV_PATH)
-        
+        # prediction_result.csv
+        df = pd.read_csv(CSV_14DAYS_PATH)
         if df.empty:
             return create_error_response(500, "데이터 파일이 비어있습니다.")
-        
         df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
-        # NaN 값을 None으로 변환 (JSON 직렬화 가능하도록)
         df = df.replace({np.nan: None})
-        
-        return create_success_response(data=df.to_dict(orient="records"))
-        
+        # prediction_result_7days.csv
+        df_7 = pd.read_csv(CSV_7DAYS_PATH)
+        if df_7.empty:
+            return create_error_response(500, "7일 예측 데이터 파일이 비어있습니다.")
+        df_7['Date'] = pd.to_datetime(df_7['Date']).dt.strftime('%Y-%m-%d')
+        df_7 = df_7.replace({np.nan: None})
+        return create_success_response(data={
+            "prediction_result_14days": df.to_dict(orient="records"),
+            "prediction_result_7days": df_7.to_dict(orient="records")
+        })
     except Exception as e:
         return create_error_response(500, f"데이터 처리 오류: {str(e)}")
 
-@app.get("/prediction")
-async def get_predictions():
-    # 파일 존재 여부 확인
-    if not os.path.exists(CSV_PATH):
-        return create_error_response(404, "예측 결과 파일을 찾을 수 없습니다.")
+# @app.get("/prediction")
+# async def get_predictions():
+#     # 파일 존재 여부 확인
+#     if not os.path.exists(CSV_PATH):
+#         return create_error_response(404, "예측 결과 파일을 찾을 수 없습니다.")
     
-    try:
-        # API 응답을 위한 데이터 로드 및 전처리
-        df = pd.read_csv(CSV_PATH)
+#     try:
+#         # API 응답을 위한 데이터 로드 및 전처리
+#         df = pd.read_csv(CSV_PATH)
         
-        if df.empty:
-            return create_error_response(500, "데이터 파일이 비어있습니다.")
+#         if df.empty:
+#             return create_error_response(500, "데이터 파일이 비어있습니다.")
         
-        df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
-        # NaN 값을 None으로 변환 (JSON 직렬화 가능하도록)
-        df = df.replace({np.nan: None})
+#         df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
+#         # NaN 값을 None으로 변환 (JSON 직렬화 가능하도록)
+#         df = df.replace({np.nan: None})
         
-        return create_success_response(data=df.to_dict(orient="records"))
+#         return create_success_response(data=df.to_dict(orient="records"))
         
-    except Exception as e:
-        return create_error_response(500, f"데이터 처리 오류: {str(e)}")
+#     except Exception as e:
+#         return create_error_response(500, f"데이터 처리 오류: {str(e)}")
 
 @app.get("/health")
 async def health_check():
@@ -211,3 +217,6 @@ if __name__ == "__main__":
     # 환경 변수에서 포트 가져오기 (기본값: 8000)
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+# news 엔드포인트 등록
+import news

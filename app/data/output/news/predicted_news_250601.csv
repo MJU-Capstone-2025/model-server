@@ -1,0 +1,92 @@
+date,title,url,is_price_related,preprocessed_title,positive_sentiment,negative_sentiment,neutral_sentiment,rise_present,increase_present,jump_present,surge_present,climb_present,fall_present,drop_present,decrease_present,decline_present,plunge_present,weighted_positive_sentiment,weighted_negative_sentiment,predicted_price_direction
+2025-03-23,USDA releases 2025 crop production report,https://www.example.com/news/0001,True,usda releases 2025 crop production report,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-04,Volatility in futures market drives coffee uncertainty,https://www.example.com/news/0002,True,volatility futures market drives coffee uncertainty,0.0,0.324,0.676,0,0,0,0,0,0,0,0,0,0,0.0,0.324,neutral
+2025-02-05,Climate change threatens coffee production long-term,https://www.example.com/news/0003,True,climate change threatens coffee production longterm,0.0,0.342,0.658,0,0,0,0,0,0,0,0,0,0,0.0,0.342,fall
+2025-01-29,Shipping delays impact coffee importers,https://www.example.com/news/0004,True,shipping delays impact coffee importers,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-14,New USDA undersecretary discusses coffee trade policy,https://www.example.com/news/0005,True,new usda undersecretary discusses coffee trade policy,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-11,Robusta export numbers rise sharply in Vietnam,https://www.example.com/news/0006,True,robusta export numbers rise sharply vietnam,0.0,0.0,1.0,1,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-17,Flooding damages key coffee-growing regions,https://www.example.com/news/0007,True,flooding damages key coffeegrowing regions,0.0,0.42,0.58,0,0,0,0,0,0,0,0,0,0,0.0,0.42,fall
+2025-01-05,Coffee futures surge after drought hits Brazil,https://www.example.com/news/0008,True,coffee futures surge drought hits brazil,0.0,0.0,1.0,0,0,0,1,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-12,Rainy season boosts Colombian coffee yields,https://www.example.com/news/0009,True,rainy season boosts colombian coffee yields,0.303,0.171,0.526,0,0,0,0,0,0,0,0,0,0,0.303,0.171,neutral
+2025-01-30,Dry weather pushes coffee prices higher,https://www.example.com/news/0010,True,dry weather pushes coffee prices higher,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-19,Coffee futures surge after drought hits Brazil,https://www.example.com/news/0011,True,coffee futures surge drought hits brazil,0.0,0.0,1.0,0,0,0,1,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-13,Rainy season boosts Colombian coffee yields,https://www.example.com/news/0012,True,rainy season boosts colombian coffee yields,0.303,0.171,0.526,0,0,0,0,0,0,0,0,0,0,0.303,0.171,neutral
+2025-03-25,ICCO releases monthly coffee bulletin,https://www.example.com/news/0013,True,icco releases monthly coffee bulletin,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-11,Flooding damages key coffee-growing regions,https://www.example.com/news/0014,True,flooding damages key coffeegrowing regions,0.0,0.42,0.58,0,0,0,0,0,0,0,0,0,0,0.0,0.42,fall
+2025-01-29,Nestlé invests in AI-driven coffee roasting system,https://www.example.com/news/0015,True,nestlé invests aidriven coffee roasting system,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-17,World Coffee Portal predicts market stabilization,https://www.example.com/news/0016,True,world coffee portal predicts market stabilization,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-01,Rain improves harvest expectations in Peru,https://www.example.com/news/0017,True,rain improves harvest expectations peru,0.412,0.0,0.588,0,0,0,0,0,0,0,0,0,0,0.412,0.0,neutral
+2025-01-21,ICCO releases monthly coffee bulletin,https://www.example.com/news/0018,True,icco releases monthly coffee bulletin,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-24,New trade deal affects Latin American coffee exports,https://www.example.com/news/0019,True,new trade deal affects latin american coffee exports,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-05,Shipping delays impact coffee importers,https://www.example.com/news/0020,True,shipping delays impact coffee importers,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-28,Rain improves harvest expectations in Peru,https://www.example.com/news/0021,True,rain improves harvest expectations peru,0.412,0.0,0.588,0,0,0,0,0,0,0,0,0,0,0.412,0.0,neutral
+2025-02-13,USDA releases 2025 crop production report,https://www.example.com/news/0022,True,usda releases 2025 crop production report,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-12,Robusta beans face logistical issues,https://www.example.com/news/0023,True,robusta beans face logistical issues,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-13,Commodity prices drop in early February trading,https://www.example.com/news/0024,True,commodity prices drop early february trading,0.0,0.296,0.704,0,0,0,0,0,0,1,0,0,0,0.0,0.296,neutral
+2025-02-14,Arabica climbs on strong demand forecasts,https://www.example.com/news/0025,True,arabica climbs strong demand forecasts,0.423,0.192,0.385,0,0,0,0,1,0,0,0,0,0,0.423,0.192,neutral
+2025-02-03,Arabica prices decline amid oversupply concerns,https://www.example.com/news/0026,True,arabica prices decline amid oversupply concerns,0.0,0.0,1.0,0,0,0,0,0,0,0,0,1,0,0.0,0.0,neutral
+2025-02-28,Brazil announces export tax changes for agriculture,https://www.example.com/news/0027,True,brazil announces export tax changes agriculture,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-16,Robusta beans face logistical issues,https://www.example.com/news/0028,True,robusta beans face logistical issues,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-11,Brazil announces export tax changes for agriculture,https://www.example.com/news/0029,True,brazil announces export tax changes agriculture,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-21,Commodity prices drop in early February trading,https://www.example.com/news/0031,True,commodity prices drop early february trading,0.0,0.296,0.704,0,0,0,0,0,0,1,0,0,0,0.0,0.296,neutral
+2025-03-15,Rainy season boosts Colombian coffee yields,https://www.example.com/news/0032,True,rainy season boosts colombian coffee yields,0.303,0.171,0.526,0,0,0,0,0,0,0,0,0,0,0.303,0.171,neutral
+2025-01-09,Arabica prices decline amid oversupply concerns,https://www.example.com/news/0033,True,arabica prices decline amid oversupply concerns,0.0,0.0,1.0,0,0,0,0,0,0,0,0,1,0,0.0,0.0,neutral
+2025-03-26,Climate change threatens coffee production long-term,https://www.example.com/news/0034,True,climate change threatens coffee production longterm,0.0,0.342,0.658,0,0,0,0,0,0,0,0,0,0,0.0,0.342,fall
+2025-02-07,Robusta export numbers rise sharply in Vietnam,https://www.example.com/news/0035,True,robusta export numbers rise sharply vietnam,0.0,0.0,1.0,1,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-30,USDA releases 2025 crop production report,https://www.example.com/news/0036,True,usda releases 2025 crop production report,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-18,World Coffee Portal predicts market stabilization,https://www.example.com/news/0037,True,world coffee portal predicts market stabilization,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-16,New coffee processing technology announced,https://www.example.com/news/0039,True,new coffee processing technology announced,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-17,Commodity prices drop in early February trading,https://www.example.com/news/0040,True,commodity prices drop early february trading,0.0,0.296,0.704,0,0,0,0,0,0,1,0,0,0,0.0,0.296,neutral
+2025-01-27,New USDA undersecretary discusses coffee trade policy,https://www.example.com/news/0041,True,new usda undersecretary discusses coffee trade policy,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-04,ICCO releases monthly coffee bulletin,https://www.example.com/news/0042,True,icco releases monthly coffee bulletin,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-10,Arabica climbs on strong demand forecasts,https://www.example.com/news/0044,True,arabica climbs strong demand forecasts,0.423,0.192,0.385,0,0,0,0,1,0,0,0,0,0,0.423,0.192,neutral
+2025-03-23,New coffee processing technology announced,https://www.example.com/news/0045,True,new coffee processing technology announced,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-10,Volatility in futures market drives coffee uncertainty,https://www.example.com/news/0046,True,volatility futures market drives coffee uncertainty,0.0,0.324,0.676,0,0,0,0,0,0,0,0,0,0,0.0,0.324,neutral
+2025-02-01,New coffee processing technology announced,https://www.example.com/news/0047,True,new coffee processing technology announced,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-01,Robusta beans face logistical issues,https://www.example.com/news/0048,True,robusta beans face logistical issues,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-30,Brazil announces export tax changes for agriculture,https://www.example.com/news/0050,True,brazil announces export tax changes agriculture,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-29,New USDA undersecretary discusses coffee trade policy,https://www.example.com/news/0051,True,new usda undersecretary discusses coffee trade policy,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-11,Rain improves harvest expectations in Peru,https://www.example.com/news/0052,True,rain improves harvest expectations peru,0.412,0.0,0.588,0,0,0,0,0,0,0,0,0,0,0.412,0.0,neutral
+2025-01-08,Climate change threatens coffee production long-term,https://www.example.com/news/0053,True,climate change threatens coffee production longterm,0.0,0.342,0.658,0,0,0,0,0,0,0,0,0,0,0.0,0.342,fall
+2025-01-05,New trade deal affects Latin American coffee exports,https://www.example.com/news/0054,True,new trade deal affects latin american coffee exports,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-21,World Coffee Portal predicts market stabilization,https://www.example.com/news/0055,True,world coffee portal predicts market stabilization,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-09,Rainy season boosts Colombian coffee yields,https://www.example.com/news/0056,True,rainy season boosts colombian coffee yields,0.303,0.171,0.526,0,0,0,0,0,0,0,0,0,0,0.303,0.171,neutral
+2025-03-14,ICCO releases monthly coffee bulletin,https://www.example.com/news/0057,True,icco releases monthly coffee bulletin,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-10,Rainy season boosts Colombian coffee yields,https://www.example.com/news/0058,True,rainy season boosts colombian coffee yields,0.303,0.171,0.526,0,0,0,0,0,0,0,0,0,0,0.303,0.171,neutral
+2025-03-25,Coffee farmers demand higher minimum price,https://www.example.com/news/0059,True,coffee farmers demand higher minimum price,0.0,0.231,0.769,0,0,0,0,0,0,0,0,0,0,0.0,0.231,neutral
+2025-02-28,Shipping delays impact coffee importers,https://www.example.com/news/0061,True,shipping delays impact coffee importers,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-03,Shipping delays impact coffee importers,https://www.example.com/news/0062,True,shipping delays impact coffee importers,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-01,Volatility in futures market drives coffee uncertainty,https://www.example.com/news/0063,True,volatility futures market drives coffee uncertainty,0.0,0.324,0.676,0,0,0,0,0,0,0,0,0,0,0.0,0.324,neutral
+2025-03-13,Brazil announces export tax changes for agriculture,https://www.example.com/news/0064,True,brazil announces export tax changes agriculture,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-03,Volatility in futures market drives coffee uncertainty,https://www.example.com/news/0065,True,volatility futures market drives coffee uncertainty,0.0,0.324,0.676,0,0,0,0,0,0,0,0,0,0,0.0,0.324,neutral
+2025-03-16,Flooding damages key coffee-growing regions,https://www.example.com/news/0066,True,flooding damages key coffeegrowing regions,0.0,0.42,0.58,0,0,0,0,0,0,0,0,0,0,0.0,0.42,fall
+2025-03-16,Robusta beans face logistical issues,https://www.example.com/news/0067,True,robusta beans face logistical issues,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-16,Climate change threatens coffee production long-term,https://www.example.com/news/0068,True,climate change threatens coffee production longterm,0.0,0.342,0.658,0,0,0,0,0,0,0,0,0,0,0.0,0.342,fall
+2025-01-18,Dry weather pushes coffee prices higher,https://www.example.com/news/0069,True,dry weather pushes coffee prices higher,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-05,Robusta export numbers rise sharply in Vietnam,https://www.example.com/news/0070,True,robusta export numbers rise sharply vietnam,0.0,0.0,1.0,1,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-07,USDA releases 2025 crop production report,https://www.example.com/news/0071,True,usda releases 2025 crop production report,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-21,New USDA undersecretary discusses coffee trade policy,https://www.example.com/news/0073,True,new usda undersecretary discusses coffee trade policy,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-24,Arabica climbs on strong demand forecasts,https://www.example.com/news/0074,True,arabica climbs strong demand forecasts,0.423,0.192,0.385,0,0,0,0,1,0,0,0,0,0,0.423,0.192,neutral
+2025-01-09,Robusta beans face logistical issues,https://www.example.com/news/0075,True,robusta beans face logistical issues,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-18,Arabica climbs on strong demand forecasts,https://www.example.com/news/0076,True,arabica climbs strong demand forecasts,0.423,0.192,0.385,0,0,0,0,1,0,0,0,0,0,0.423,0.192,neutral
+2025-03-01,Dry weather pushes coffee prices higher,https://www.example.com/news/0077,True,dry weather pushes coffee prices higher,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-02,Brazil announces export tax changes for agriculture,https://www.example.com/news/0078,True,brazil announces export tax changes agriculture,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-02,New USDA undersecretary discusses coffee trade policy,https://www.example.com/news/0079,True,new usda undersecretary discusses coffee trade policy,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-15,New USDA undersecretary discusses coffee trade policy,https://www.example.com/news/0080,True,new usda undersecretary discusses coffee trade policy,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-10,Rain improves harvest expectations in Peru,https://www.example.com/news/0081,True,rain improves harvest expectations peru,0.412,0.0,0.588,0,0,0,0,0,0,0,0,0,0,0.412,0.0,neutral
+2025-02-04,Rain improves harvest expectations in Peru,https://www.example.com/news/0082,True,rain improves harvest expectations peru,0.412,0.0,0.588,0,0,0,0,0,0,0,0,0,0,0.412,0.0,neutral
+2025-03-24,New trade deal affects Latin American coffee exports,https://www.example.com/news/0083,True,new trade deal affects latin american coffee exports,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-25,New coffee processing technology announced,https://www.example.com/news/0085,True,new coffee processing technology announced,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-28,Coffee futures surge after drought hits Brazil,https://www.example.com/news/0086,True,coffee futures surge drought hits brazil,0.0,0.0,1.0,0,0,0,1,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-03,Dry weather pushes coffee prices higher,https://www.example.com/news/0087,True,dry weather pushes coffee prices higher,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-23,Dry weather pushes coffee prices higher,https://www.example.com/news/0088,True,dry weather pushes coffee prices higher,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-06,Arabica climbs on strong demand forecasts,https://www.example.com/news/0091,True,arabica climbs strong demand forecasts,0.423,0.192,0.385,0,0,0,0,1,0,0,0,0,0,0.423,0.192,neutral
+2025-01-26,Shipping delays impact coffee importers,https://www.example.com/news/0092,True,shipping delays impact coffee importers,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-02-17,Rain improves harvest expectations in Peru,https://www.example.com/news/0093,True,rain improves harvest expectations peru,0.412,0.0,0.588,0,0,0,0,0,0,0,0,0,0,0.412,0.0,neutral
+2025-01-21,Brazil announces export tax changes for agriculture,https://www.example.com/news/0094,True,brazil announces export tax changes agriculture,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-09,Coffee futures surge after drought hits Brazil,https://www.example.com/news/0095,True,coffee futures surge drought hits brazil,0.0,0.0,1.0,0,0,0,1,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-18,New trade deal affects Latin American coffee exports,https://www.example.com/news/0096,True,new trade deal affects latin american coffee exports,0.0,0.0,1.0,0,0,0,0,0,0,0,0,0,0,0.0,0.0,neutral
+2025-03-04,Coffee futures surge after drought hits Brazil,https://www.example.com/news/0097,True,coffee futures surge drought hits brazil,0.0,0.0,1.0,0,0,0,1,0,0,0,0,0,0,0.0,0.0,neutral
+2025-01-15,Commodity prices drop in early February trading,https://www.example.com/news/0098,True,commodity prices drop early february trading,0.0,0.296,0.704,0,0,0,0,0,0,1,0,0,0,0.0,0.296,neutral
+2025-02-09,Climate change threatens coffee production long-term,https://www.example.com/news/0099,True,climate change threatens coffee production longterm,0.0,0.342,0.658,0,0,0,0,0,0,0,0,0,0,0.0,0.342,fall
+2025-01-08,Climate change threatens coffee production long-term,https://www.example.com/news/0100,True,climate change threatens coffee production longterm,0.0,0.342,0.658,0,0,0,0,0,0,0,0,0,0,0.0,0.342,fall
