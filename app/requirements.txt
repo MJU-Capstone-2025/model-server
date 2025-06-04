@@ -1,0 +1,21 @@
+# 배포용 requirements.txt - 최소한의 의존성만 포함
+fastapi==0.103.1
+uvicorn==0.23.2
+pandas==2.2.0
+numpy==1.26.0
+newspaper3k==0.2.8
+# ===========================================
+# torch
+# pandas
+# numpy
+# scikit-learn
+# matplotlib
+# entmax
+# fastapi
+# uvicorn
+# yfinance==0.2.35
+# newspaper3k==0.2.8
+# konlpy==0.6.0
+# pyarrow==14.0.1
+# transformers==4.35.0
+# seaborn==0.13.0
